@@ -55,11 +55,17 @@ node --experimental-strip-types --test tests/index.test.ts
 ```bash
 npx tsc
 ```
-{% elif language == 'shell' and shell_type == 'bash' %}
+{% elif language == 'shell' and shell_type == 'bash' and shell_test_framework == 'bats' %}
 ### Run Tests
 
 ```bash
 mise exec -- bats tests/
+```
+{% elif language == 'shell' %}
+### Run Tests
+
+```bash
+mise exec -- shellspec
 ```
 {% elif language == 'lua' %}
 ### Run Tests
@@ -72,6 +78,14 @@ mise exec -- luarocks test
 
 ```bash
 mise exec -- hk check --fix
+```
+
+## Updating from Template
+
+This project was scaffolded with [copier](https://copier.readthedocs.io). To pull in the latest template changes:
+
+```bash
+copier update --trust
 ```
 
 ## License
