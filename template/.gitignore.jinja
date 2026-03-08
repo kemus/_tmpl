@@ -1,0 +1,36 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Build
+dist/
+build/
+{% if language == 'python' -%}
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+*.egg
+{% elif language == 'rust' -%}
+
+# Rust
+target/
+{% elif language == 'typescript' -%}
+
+# Node
+node_modules/
+{% endif -%}

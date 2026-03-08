@@ -1,0 +1,22 @@
+[tools]
+hk = "latest"
+{% if language == 'python' -%}
+python = "3.12"
+uv = "latest"
+{% elif language == 'rust' -%}
+rust = "latest"
+{% elif language == 'lua' -%}
+lua = "latest"
+stylua = "latest"
+"cargo:selene" = "latest"
+{% elif language == 'shell' -%}
+{% if shell_type in ['bash', 'posix'] -%}
+shellcheck = "latest"
+shfmt = "latest"
+{% endif -%}
+{% if shell_type == 'bash' -%}
+"npm:bats" = "latest"
+{% endif -%}
+{% elif language == 'typescript' -%}
+node = "lts"
+{% endif -%}

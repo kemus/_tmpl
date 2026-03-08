@@ -1,0 +1,86 @@
+amends "package://pkg.pkl-lang.org/hk/hk@latest#/hk.pkl"
+{% if language in ['python', 'rust', 'shell', 'typescript', 'lua'] -%}
+import "package://pkg.pkl-lang.org/hk/hk@latest#/Builtins.pkl"
+{% endif %}
+{%- if language == 'python' %}
+local steps = new Mapping<String, Step> {
+  ["ruff"] = (Builtins.ruff) {
+    prefix = "mise exec -- uv run "
+  }
+  ["ruff_format"] = (Builtins.ruff_format) {
+    prefix = "mise exec -- uv run "
+  }
+  ["basedpyright"] {
+    prefix = "mise exec -- uv run "
+    glob = List("**/*.py", "**/*.pyi")
+    check = "basedpyright {{ '{{ files }}' }}"
+  }
+}
+{%- elif language == 'rust' %}
+local steps = new Mapping<String, Step> {
+  ["cargo_clippy"] = (Builtins.cargo_clippy) {
+    prefix = "mise exec -- "
+  }
+  ["cargo_fmt"] = (Builtins.cargo_fmt) {
+    prefix = "mise exec -- "
+  }
+}
+{%- elif language == 'shell' %}
+local steps = new Mapping<String, Step> {
+{%- if shell_type in ['bash', 'posix'] %}
+  ["shellcheck"] = (Builtins.shellcheck) {
+    prefix = "mise exec -- "
+  }
+  ["shfmt"] = (Builtins.shfmt) {
+    prefix = "mise exec -- "
+  }
+{%- elif shell_type == 'zsh' %}
+  ["zsh_syntax"] {
+    glob = List("**/*.sh", "**/*.zsh")
+    check = "zsh -n {{ '{{ files }}' }}"
+  }
+{%- endif %}
+}
+{%- elif language == 'typescript' %}
+local steps = new Mapping<String, Step> {
+  ["eslint"] = (Builtins.eslint) {
+    prefix = "npx "
+  }
+  ["prettier"] = (Builtins.prettier) {
+    prefix = "npx "
+  }
+  ["tsc"] = (Builtins.tsc) {
+    prefix = "npx "
+  }
+}
+{%- elif language == 'lua' %}
+local steps = new Mapping<String, Step> {
+  ["stylua"] = (Builtins.stylua) {
+    prefix = "mise exec -- "
+  }
+  ["selene"] = (Builtins.selene) {
+    prefix = "mise exec -- "
+  }
+}
+{%- endif %}
+
+local all = new Group {
+  steps {
+    ...steps
+  }
+}
+
+hooks {
+  ["pre-commit"] {
+    fix = true
+    stash = "git"
+    steps { ["all"] = all }
+  }
+  ["fix"] {
+    fix = true
+    steps { ["all"] = all }
+  }
+  ["check"] {
+    steps { ["all"] = all }
+  }
+}

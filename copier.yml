@@ -1,0 +1,138 @@
+_subdirectory: template
+_min_copier_version: "9.0.0"
+_answers_file: .config/copier/base-answers.yml
+_jinja_extensions:
+  - copier_template_extensions.TemplateExtensionLoader
+  - extensions.py:GitExtension
+_exclude:
+  - .gitkeep
+
+# --- Questions ---
+
+project_name:
+  type: str
+  help: Project name
+  default: "{{ cwd_name() }}"
+
+project_description:
+  type: str
+  help: One-line description
+  default: "A new {{ project_name }} project"
+
+author:
+  type: str
+  help: Author name
+  default: "{{ git_user_name() }}"
+
+author_email:
+  type: str
+  help: Author email
+  default: "{{ git_user_email() }}"
+
+license_method:
+  type: str
+  help: How do you want to choose a license?
+  choices:
+    MIT (default): "MIT (default)"
+    Choose a license: "Choose a license"
+    Enter SPDX identifier: "Enter SPDX identifier"
+  default: "MIT (default)"
+
+license_spdx:
+  type: str
+  help: SPDX license identifier
+  when: "{{ license_method == 'Enter SPDX identifier' }}"
+
+license_copyleft:
+  type: bool
+  help: Require forks to keep license?
+  default: false
+  when: "{{ license_method == 'Choose a license' }}"
+
+license_patent:
+  type: bool
+  help: Stop contributors suing over patents?
+  default: false
+  when: "{{ license_method == 'Choose a license' and not license_copyleft }}"
+
+license_strong_copyleft:
+  type: bool
+  help: Even if just linking as a library?
+  default: false
+  when: "{{ license_method == 'Choose a license' and license_copyleft }}"
+
+license:
+  type: str
+  when: false
+  default: >-
+    {% if license_method == 'MIT (default)' -%}
+      MIT
+    {%- elif license_method == 'Enter SPDX identifier' -%}
+      {{ license_spdx }}
+    {%- elif not license_copyleft and not license_patent -%}
+      MIT
+    {%- elif not license_copyleft and license_patent -%}
+      Apache-2.0
+    {%- elif license_copyleft and not license_strong_copyleft -%}
+      LGPL-3.0-only
+    {%- elif license_copyleft and license_strong_copyleft -%}
+      GPL-3.0-only
+    {%- else -%}
+      MIT
+    {%- endif %}
+
+language:
+  type: str
+  help: Primary language
+  choices:
+    Python: python
+    Rust: rust
+    Lua: lua
+    Shell: shell
+    ECMAScript: ecmascript
+
+shell_type:
+  type: str
+  help: Shell dialect
+  when: "{{ language == 'shell' }}"
+  choices:
+    Bash: bash
+    POSIX sh: posix
+    Zsh: zsh
+  default: bash
+
+indent_style:
+  type: str
+  help: Indentation style
+  choices:
+    2 spaces: "2"
+    4 spaces: "4"
+    Tabs: tab
+  default: "2"
+
+max_line_length:
+  type: int
+  help: Maximum line length
+  default: 120
+
+use_claude:
+  type: bool
+  help: Set up Claude Code integration?
+  default: true
+
+# --- Computed variables ---
+
+project_name_kebab:
+  type: str
+  when: false
+  default: "{{ project_name | lower | replace(' ', '-') | replace('_', '-') }}"
+
+project_slug:
+  type: str
+  when: false
+  default: "{{ project_name | lower | replace(' ', '_') | replace('-', '_') }}"
+
+# --- Tasks ---
+
+_tasks:
+  - "bash {{ _copier_conf.src_path }}/post-task.sh {{ _copier_conf.src_path }}"

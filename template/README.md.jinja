@@ -1,0 +1,79 @@
+# {{ project_name }}
+
+{{ project_description }}
+
+## Getting Started
+
+### Prerequisites
+
+- [mise](https://mise.jdx.dev) for dev tool management
+
+### Setup
+
+```bash
+mise install --locked
+```
+{% if language == 'python' %}
+### Install Dependencies
+
+```bash
+mise exec -- uv sync
+```
+
+### Run Tests
+
+```bash
+mise exec -- uv run pytest
+```
+{% elif language == 'rust' %}
+### Build
+
+```bash
+mise exec -- cargo build
+```
+
+### Run Tests
+
+```bash
+mise exec -- cargo test
+```
+{% elif language == 'typescript' %}
+### Install Dependencies
+
+```bash
+npm install
+```
+
+### Run Tests
+
+```bash
+node --experimental-strip-types --test tests/index.test.ts
+```
+
+### Build
+
+```bash
+npx tsc
+```
+{% elif language == 'shell' and shell_type == 'bash' %}
+### Run Tests
+
+```bash
+mise exec -- bats tests/
+```
+{% elif language == 'lua' %}
+### Run Tests
+
+```bash
+mise exec -- luarocks test
+```
+{% endif %}
+### Run Checks
+
+```bash
+mise exec -- hk check --fix
+```
+
+## License
+
+{{ license }}
