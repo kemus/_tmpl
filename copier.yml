@@ -135,4 +135,10 @@ project_slug:
 # --- Tasks ---
 
 _tasks:
-  - "bash {{ _copier_conf.src_path }}/post-task.sh {{ _copier_conf.src_path }}"
+  - >-
+    bash {{ _copier_conf.src_path }}/post-task.sh
+    {{ _copier_conf.src_path }}
+    {{ language }}
+    {{ use_claude }}
+    {{ license }}
+    {{ shell_type | default('') }}
