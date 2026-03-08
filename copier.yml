@@ -112,6 +112,15 @@ shell_type:
     Zsh: zsh
   default: bash
 
+shell_test_framework:
+  type: str
+  help: Test framework
+  when: "{{ language == 'shell' and shell_type == 'bash' }}"
+  choices:
+    Bats: bats
+    ShellSpec: shellspec
+  default: bats
+
 indent_style:
   type: str
   help: Indentation style
@@ -154,6 +163,7 @@ _tasks:
     {{ license }}
     '{{ shell_type | default('') }}'
     '{{ python_version | default('') }}'
+    '{{ shell_test_framework | default('') }}'
     '{{ author }}'
     '{{ author_email }}'
     '{{ project_name }}'

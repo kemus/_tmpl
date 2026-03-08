@@ -14,8 +14,12 @@ stylua = "latest"
 shellcheck = "latest"
 shfmt = "latest"
 {% endif -%}
-{% if shell_type == 'bash' -%}
+{% if shell_type == 'bash' and shell_test_framework == 'bats' -%}
 "npm:bats" = "latest"
+{% elif shell_type == 'bash' and shell_test_framework == 'shellspec' -%}
+shellspec = "latest"
+{% elif shell_type in ['posix', 'zsh'] -%}
+shellspec = "latest"
 {% endif -%}
 {% elif language == 'typescript' -%}
 node = "lts"

@@ -48,6 +48,28 @@ local linters = new Mapping<String, Step> {
   }
 {%- endif %}
 }
+{% if shell_type == 'bash' and shell_test_framework == 'bats' -%}
+local tests = new Mapping<String, Step> {
+  ["bats"] {
+    glob = List("**/*.sh", "**/*.bats")
+    check = "mise exec -- bats tests/"
+  }
+}
+{%- elif shell_type == 'bash' and shell_test_framework == 'shellspec' -%}
+local tests = new Mapping<String, Step> {
+  ["shellspec"] {
+    glob = List("**/*.sh", "spec/**/*_spec.sh")
+    check = "mise exec -- shellspec"
+  }
+}
+{%- else -%}
+local tests = new Mapping<String, Step> {
+  ["shellspec"] {
+    glob = List("**/*.sh", "spec/**/*_spec.sh")
+    check = "mise exec -- shellspec"
+  }
+}
+{%- endif %}
 {%- elif language == 'typescript' %}
 local linters = new Mapping<String, Step> {
   ["eslint"] = (Builtins.eslint) {
@@ -84,7 +106,7 @@ hooks {
   ["check"] {
     steps {
       ...linters
-{%- if language == 'python' %}
+{%- if language in ['python', 'shell'] %}
       ...tests
 {%- endif %}
     }
