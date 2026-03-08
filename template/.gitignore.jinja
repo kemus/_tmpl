@@ -30,9 +30,15 @@ __pycache__/
 *.egg
 {% elif language == 'rust' -%}
 
+# Lockfile
+!Cargo.lock
+
 # Rust
 target/
 {% elif language == 'typescript' -%}
+
+# Lockfile
+!package-lock.json
 
 # Node
 node_modules/
