@@ -20,4 +20,5 @@ jobs:
 {% if language == 'python' %}      - run: mise exec -- uv sync
       - run: mise exec -- uv run pytest
 {% elif language == 'typescript' %}      - run: npm install
+      - run: npm test
 {% endif %}      - run: mise exec -- hk check --no-progress --quiet
