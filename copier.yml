@@ -141,4 +141,12 @@ _tasks:
     {{ language }}
     {{ use_claude }}
     {{ license }}
-    {{ shell_type | default('') }}
+    '{{ shell_type | default('') }}'
+    '{{ author }}'
+    '{{ author_email }}'
+    '{{ project_name }}'
+    '{{ project_name_kebab }}'
+    '{{ project_slug }}'
+    '{{ project_description }}'
+    '{{ indent_style }}'
+    '{{ max_line_length }}'

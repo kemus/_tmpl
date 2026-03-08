@@ -2,16 +2,37 @@
 set -euo pipefail
 
 TEMPLATE_SRC="$1"
-DEST="$(pwd)"
-ANSWERS="$DEST/.config/copier/base-answers.yml"
+LANGUAGE="$2"
+USE_CLAUDE="$3"
+LICENSE="$4"
+SHELL_TYPE="${5:-}"
+AUTHOR="$6"
+AUTHOR_EMAIL="$7"
+PROJECT_NAME="$8"
+PROJECT_NAME_KEBAB="$9"
+PROJECT_SLUG="${10}"
+PROJECT_DESCRIPTION="${11}"
+INDENT_STYLE="${12}"
+MAX_LINE_LENGTH="${13}"
 
-# Read variables from answers
-LANGUAGE=$(grep '^language:' "$ANSWERS" | awk '{print $2}')
-USE_CLAUDE=$(grep '^use_claude:' "$ANSWERS" | awk '{print $2}')
-LICENSE=$(grep '^license:' "$ANSWERS" | awk '{print $2}')
-AUTHOR=$(grep '^author:' "$ANSWERS" | sed "s/^author: //")
-AUTHOR_EMAIL=$(grep '^author_email:' "$ANSWERS" | sed "s/^author_email: //")
-PROJECT_NAME=$(grep '^project_name:' "$ANSWERS" | sed "s/^project_name: //")
+DEST="$(pwd)"
+
+# Write base answers for child templates to consume via --data-file
+mkdir -p "$DEST/.config/copier"
+cat > "$DEST/.config/copier/base-answers.yml" << EOF
+language: $LANGUAGE
+use_claude: $USE_CLAUDE
+license: $LICENSE
+shell_type: $SHELL_TYPE
+author: $AUTHOR
+author_email: $AUTHOR_EMAIL
+project_name: $PROJECT_NAME
+project_name_kebab: $PROJECT_NAME_KEBAB
+project_slug: $PROJECT_SLUG
+project_description: $PROJECT_DESCRIPTION
+indent_style: '$INDENT_STYLE'
+max_line_length: $MAX_LINE_LENGTH
+EOF
 
 # Symlinks
 ln -sf .agents/instructions/AGENTS.md AGENTS.md
@@ -33,6 +54,7 @@ uv tool install copier --with copier-template-extensions 2>/dev/null || true
 # Invoke child: children/<language>/
 CHILD="$TEMPLATE_SRC/children/$LANGUAGE"
 CHILD_ANSWERS="$DEST/.config/copier/${LANGUAGE}-answers.yml"
+ANSWERS="$DEST/.config/copier/base-answers.yml"
 
 if [[ -d "$CHILD" ]]; then
   if [[ -f "$CHILD_ANSWERS" ]]; then
