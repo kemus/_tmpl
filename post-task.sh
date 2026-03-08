@@ -53,15 +53,16 @@ uv tool install copier --with copier-template-extensions 2>/dev/null || true
 
 # Invoke child: children/<language>/
 CHILD="$TEMPLATE_SRC/children/$LANGUAGE"
-CHILD_ANSWERS="$DEST/.config/copier/${LANGUAGE}-answers.yml"
+CHILD_ANSWERS_REL=".config/copier/${LANGUAGE}-answers.yml"
+CHILD_ANSWERS="$DEST/$CHILD_ANSWERS_REL"
 ANSWERS="$DEST/.config/copier/base-answers.yml"
 
 if [[ -d "$CHILD" ]]; then
   if [[ -f "$CHILD_ANSWERS" ]]; then
-    copier update --trust --defaults --answers-file "$CHILD_ANSWERS" "$DEST"
+    copier update --trust --defaults --answers-file "$CHILD_ANSWERS_REL" "$DEST"
   else
     copier copy --trust --defaults \
-      --answers-file "$CHILD_ANSWERS" \
+      --answers-file "$CHILD_ANSWERS_REL" \
       --data-file "$ANSWERS" \
       "$CHILD" "$DEST"
   fi
