@@ -89,7 +89,7 @@ language:
     Rust: rust
     Lua: lua
     Shell: shell
-    ECMAScript: ecmascript
+    TypeScript: typescript
 
 shell_type:
   type: str

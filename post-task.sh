@@ -41,8 +41,16 @@ if [[ "$USE_CLAUDE" == "true" || "$USE_CLAUDE" == "True" ]]; then
   ln -sf .agents/instructions/AGENTS.md CLAUDE.md
 fi
 
-# Mise + license
+# Mise: trust, pin tool versions, generate lockfile
 mise trust --quiet
+# Parse tool names from the generated [tools] section and pin each one
+grep -E '^\s*"?[a-zA-Z]' "$DEST/.config/mise/config.toml" \
+  | sed 's/\s*=.*//; s/^[[:space:]]*//; s/"//g' \
+  | while read -r tool; do
+      mise use "${tool}@latest" --pin
+    done
+mise lock
+
 mise exec go:github.com/Shresht7/gh-license -- \
   gh-license create "$LICENSE" \
   --author "$AUTHOR <$AUTHOR_EMAIL>" \

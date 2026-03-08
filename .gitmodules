@@ -4,12 +4,12 @@
 [submodule "children/rust"]
 	path = children/rust
 	url = https://github.com/kemus/_tmpl_rust.git
-[submodule "children/ecmascript"]
-	path = children/ecmascript
-	url = https://github.com/kemus/_tmpl_ecmascript.git
 [submodule "children/lua"]
 	path = children/lua
 	url = https://github.com/kemus/_tmpl_lua.git
 [submodule "children/shell"]
 	path = children/shell
 	url = https://github.com/kemus/_tmpl_shell.git
+[submodule "children/typescript"]
+	path = children/typescript
+	url = https://github.com/kemus/_tmpl_typescript.git

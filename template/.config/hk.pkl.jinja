@@ -1,9 +1,9 @@
-amends "package://pkg.pkl-lang.org/hk/hk@latest#/hk.pkl"
+amends "package://github.com/jdx/hk/releases/download/v1.38.0/hk@1.38.0#/Config.pkl"
 {% if language in ['python', 'rust', 'shell', 'typescript', 'lua'] -%}
-import "package://pkg.pkl-lang.org/hk/hk@latest#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.38.0/hk@1.38.0#/Builtins.pkl"
 {% endif %}
 {%- if language == 'python' %}
-local steps = new Mapping<String, Step> {
+local linters = new Mapping<String, Step> {
   ["ruff"] = (Builtins.ruff) {
     prefix = "mise exec -- uv run "
   }
@@ -17,7 +17,7 @@ local steps = new Mapping<String, Step> {
   }
 }
 {%- elif language == 'rust' %}
-local steps = new Mapping<String, Step> {
+local linters = new Mapping<String, Step> {
   ["cargo_clippy"] = (Builtins.cargo_clippy) {
     prefix = "mise exec -- "
   }
@@ -26,7 +26,7 @@ local steps = new Mapping<String, Step> {
   }
 }
 {%- elif language == 'shell' %}
-local steps = new Mapping<String, Step> {
+local linters = new Mapping<String, Step> {
 {%- if shell_type in ['bash', 'posix'] %}
   ["shellcheck"] = (Builtins.shellcheck) {
     prefix = "mise exec -- "
@@ -42,7 +42,7 @@ local steps = new Mapping<String, Step> {
 {%- endif %}
 }
 {%- elif language == 'typescript' %}
-local steps = new Mapping<String, Step> {
+local linters = new Mapping<String, Step> {
   ["eslint"] = (Builtins.eslint) {
     prefix = "npx "
   }
@@ -54,7 +54,7 @@ local steps = new Mapping<String, Step> {
   }
 }
 {%- elif language == 'lua' %}
-local steps = new Mapping<String, Step> {
+local linters = new Mapping<String, Step> {
   ["stylua"] = (Builtins.stylua) {
     prefix = "mise exec -- "
   }
@@ -64,23 +64,17 @@ local steps = new Mapping<String, Step> {
 }
 {%- endif %}
 
-local all = new Group {
-  steps {
-    ...steps
-  }
-}
-
 hooks {
   ["pre-commit"] {
     fix = true
     stash = "git"
-    steps { ["all"] = all }
+    steps = linters
   }
   ["fix"] {
     fix = true
-    steps { ["all"] = all }
+    steps = linters
   }
   ["check"] {
-    steps { ["all"] = all }
+    steps = linters
   }
 }
