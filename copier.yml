@@ -121,6 +121,15 @@ shell_test_framework:
     ShellSpec: shellspec
   default: bats
 
+ts_test_framework:
+  type: str
+  help: Test framework
+  when: "{{ language == 'typescript' }}"
+  choices:
+    "node:test": node
+    Vitest: vitest
+  default: node
+
 indent_style:
   type: str
   help: Indentation style
@@ -164,6 +173,7 @@ _tasks:
     '{{ shell_type | default('') }}'
     '{{ python_version | default('') }}'
     '{{ shell_test_framework | default('') }}'
+    '{{ ts_test_framework | default('') }}'
     '{{ author }}'
     '{{ author_email }}'
     '{{ project_name }}'
