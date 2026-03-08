@@ -36,7 +36,7 @@ EOF
 
 # Symlinks
 ln -sf .agents/instructions/AGENTS.md AGENTS.md
-if [[ "$USE_CLAUDE" == "true" ]]; then
+if [[ "$USE_CLAUDE" == "true" || "$USE_CLAUDE" == "True" ]]; then
   ln -sf .agents/claude .claude
   ln -sf .agents/instructions/AGENTS.md CLAUDE.md
 fi

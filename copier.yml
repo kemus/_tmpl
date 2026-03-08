@@ -139,7 +139,7 @@ _tasks:
     bash {{ _copier_conf.src_path }}/post-task.sh
     {{ _copier_conf.src_path }}
     {{ language }}
-    {{ use_claude }}
+    {{ use_claude | lower }}
     {{ license }}
     '{{ shell_type | default('') }}'
     '{{ author }}'
