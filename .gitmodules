@@ -1,0 +1,15 @@
+[submodule "children/python"]
+	path = children/python
+	url = https://github.com/kemus/_tmpl_python.git
+[submodule "children/rust"]
+	path = children/rust
+	url = https://github.com/kemus/_tmpl_rust.git
+[submodule "children/ecmascript"]
+	path = children/ecmascript
+	url = https://github.com/kemus/_tmpl_ecmascript.git
+[submodule "children/lua"]
+	path = children/lua
+	url = https://github.com/kemus/_tmpl_lua.git
+[submodule "children/shell"]
+	path = children/shell
+	url = https://github.com/kemus/_tmpl_shell.git
