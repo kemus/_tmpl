@@ -91,6 +91,17 @@ language:
     Shell: shell
     TypeScript: typescript
 
+python_version:
+  type: str
+  help: Minimum Python version
+  when: "{{ language == 'python' }}"
+  choices:
+    "3.13": "3.13"
+    "3.12": "3.12"
+    "3.11": "3.11"
+    "3.10": "3.10"
+  default: "3.13"
+
 shell_type:
   type: str
   help: Shell dialect
@@ -142,6 +153,7 @@ _tasks:
     {{ use_claude | lower }}
     {{ license }}
     '{{ shell_type | default('') }}'
+    '{{ python_version | default('') }}'
     '{{ author }}'
     '{{ author_email }}'
     '{{ project_name }}'

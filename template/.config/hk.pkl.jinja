@@ -16,6 +16,13 @@ local linters = new Mapping<String, Step> {
     check = "basedpyright {{ '{{ files }}' }}"
   }
 }
+
+local tests = new Mapping<String, Step> {
+  ["pytest"] {
+    glob = List("**/*.py")
+    check = "mise exec -- uv run pytest"
+  }
+}
 {%- elif language == 'rust' %}
 local linters = new Mapping<String, Step> {
   ["cargo_clippy"] = (Builtins.cargo_clippy) {
@@ -75,6 +82,11 @@ hooks {
     steps = linters
   }
   ["check"] {
-    steps = linters
+    steps {
+      ...linters
+{%- if language == 'python' %}
+      ...tests
+{%- endif %}
+    }
   }
 }
