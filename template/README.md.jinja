@@ -47,7 +47,11 @@ npm install
 ### Run Tests
 
 ```bash
+{% if ts_test_framework == 'vitest' -%}
+npx vitest run
+{%- else -%}
 node --experimental-strip-types --test tests/index.test.ts
+{%- endif %}
 ```
 
 ### Build
