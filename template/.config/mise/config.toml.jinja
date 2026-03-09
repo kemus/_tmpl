@@ -12,7 +12,7 @@ stylua = "latest"
 {% elif language == 'shell' -%}
 {% if shell_type in ['bash', 'posix'] -%}
 shellcheck = "latest"
-shfmt = "latest"
+"asdf:luizm/asdf-shfmt" = "latest"
 {% endif -%}
 {% if shell_type == 'bash' and shell_test_framework == 'bats' -%}
 "npm:bats" = "latest"
