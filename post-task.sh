@@ -40,11 +40,40 @@ indent_style: '$INDENT_STYLE'
 max_line_length: $MAX_LINE_LENGTH
 EOF
 
-# Symlinks
-ln -sf .agents/instructions/AGENTS.md AGENTS.md
+# Create empty directories (copier excludes .gitkeep)
+mkdir -p "$DEST/.config/agents/flows/ideas/proposed"
+mkdir -p "$DEST/.config/agents/flows/ideas/approved"
+mkdir -p "$DEST/.config/agents/flows/ideas/rejected"
+
 if [[ "$USE_CLAUDE" == "true" || "$USE_CLAUDE" == "True" ]]; then
-  ln -sf .agents/claude .claude
-  ln -sf .agents/instructions/AGENTS.md CLAUDE.md
+  # Create history/claude/ (not in template due to .gitkeep exclusion)
+  mkdir -p "$DEST/.config/agents/history/claude"
+
+  # harness/claude/ — the entry point .claude will symlink to
+  mkdir -p "$DEST/.config/agents/harness/claude"
+  ln -sf ../../flows/claude      "$DEST/.config/agents/harness/claude/flows"
+  ln -sf ../../instructions/claude "$DEST/.config/agents/harness/claude/instructions"
+  ln -sf ../../plans/claude       "$DEST/.config/agents/harness/claude/plans"
+  ln -sf ../README.md             "$DEST/.config/agents/harness/claude/README.md"
+  ln -sf ../../settings/claude.local.json "$DEST/.config/agents/harness/claude/settings.local.json"
+
+  # instructions/claude/ — harness adapter
+  mkdir -p "$DEST/.config/agents/instructions/claude"
+  ln -sf ../AGENTS.md  "$DEST/.config/agents/instructions/claude/CLAUDE.md"
+  ln -sf ../README.md  "$DEST/.config/agents/instructions/claude/README.md"
+
+  # flows/claude/ — harness adapter
+  mkdir -p "$DEST/.config/agents/flows/claude"
+  ln -sf ../ideas      "$DEST/.config/agents/flows/claude/ideas"
+  ln -sf ../README.md  "$DEST/.config/agents/flows/claude/README.md"
+
+  # plans/claude/ — add README and history symlinks
+  ln -sf ../README.md         "$DEST/.config/agents/plans/claude/README.md"
+  ln -sf ../../history/claude "$DEST/.config/agents/plans/claude/history"
+
+  # Root-level symlinks
+  ln -sf .config/agents/harness/claude "$DEST/.claude"
+  ln -sf .config/agents/instructions/AGENTS.md "$DEST/CLAUDE.md"
 fi
 
 # Mise: trust, pin tool versions, generate lockfile
