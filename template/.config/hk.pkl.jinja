@@ -82,6 +82,20 @@ local linters = new Mapping<String, Step> {
     prefix = "npx "
   }
 }
+
+local tests = new Mapping<String, Step> {
+{% if ts_test_framework == 'vitest' %}
+  ["vitest"] {
+    glob = List("**/*.ts")
+    check = "npx vitest run"
+  }
+{% else %}
+  ["node_test"] {
+    glob = List("**/*.ts")
+    check = "node --experimental-strip-types --test tests/index.test.ts"
+  }
+{% endif %}
+}
 {%- elif language == 'lua' %}
 local linters = new Mapping<String, Step> {
   ["stylua"] = (Builtins.stylua) {
@@ -106,7 +120,7 @@ hooks {
   ["check"] {
     steps {
       ...linters
-{%- if language in ['python', 'shell'] %}
+{%- if language in ['python', 'shell', 'typescript'] %}
       ...tests
 {%- endif %}
     }

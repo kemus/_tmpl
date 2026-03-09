@@ -40,7 +40,7 @@ mise exec -- hk check --fix
 
 - Strict mode enabled
 - ES modules (`"type": "module"`)
-- Run tests: `node --experimental-strip-types --test tests/index.test.ts`
+- Run tests: {% if ts_test_framework == 'vitest' %}`npx vitest run`{% else %}`node --experimental-strip-types --test tests/index.test.ts`{% endif %}
 - Run linter: `npx eslint src/ tests/`
 - Run formatter: `npx prettier --write .`
 - Build: `npx tsc`
