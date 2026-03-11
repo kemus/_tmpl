@@ -12,7 +12,7 @@ indent_style = tab
 indent_style = space
 indent_size = {{ indent_style }}
 {% endif %}
-{% if language == 'python' and indent_style != '4' -%}
+{% if 'python' in languages and indent_style != '4' -%}
 [*.py]
 indent_size = 4
 {% endif %}

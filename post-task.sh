@@ -2,7 +2,7 @@
 set -euo pipefail
 
 TEMPLATE_SRC="$1"
-LANGUAGE="$2"
+LANGUAGES_JSON="$2"
 USE_CLAUDE="$3"
 LICENSE="$4"
 SHELL_TYPE="${5:-}"
@@ -20,10 +20,16 @@ MAX_LINE_LENGTH="${16}"
 
 DEST="$(pwd)"
 
+# Parse languages JSON array into bash array
+mapfile -t LANGUAGES_ARRAY < <(echo "$LANGUAGES_JSON" | python3 -c "import sys,json; [print(l) for l in json.load(sys.stdin)]")
+FIRST_LANGUAGE="${LANGUAGES_ARRAY[0]:-}"
+
 # Write base answers for child templates to consume via --data-file
 mkdir -p "$DEST/.config/copier"
 cat > "$DEST/.config/copier/base-answers.yml" << EOF
-language: $LANGUAGE
+language: $FIRST_LANGUAGE
+languages:
+$(printf '  - %s\n' "${LANGUAGES_ARRAY[@]}")
 use_claude: $USE_CLAUDE
 license: $LICENSE
 shell_type: $SHELL_TYPE
@@ -94,19 +100,22 @@ mise exec go:github.com/Shresht7/gh-license -- \
 # Ensure copier
 uv tool install copier --with copier-template-extensions 2>/dev/null || true
 
-# Invoke child: children/<language>/
-CHILD="$TEMPLATE_SRC/children/$LANGUAGE"
-CHILD_ANSWERS_REL=".config/copier/${LANGUAGE}-answers.yml"
-CHILD_ANSWERS="$DEST/$CHILD_ANSWERS_REL"
+# Invoke child templates for each selected language
 ANSWERS="$DEST/.config/copier/base-answers.yml"
 
-if [[ -d "$CHILD" ]]; then
-  if [[ -f "$CHILD_ANSWERS" ]]; then
-    copier update --trust --defaults --answers-file "$CHILD_ANSWERS_REL" "$DEST"
-  else
-    copier copy --trust --defaults \
-      --answers-file "$CHILD_ANSWERS_REL" \
-      --data-file "$ANSWERS" \
-      "$CHILD" "$DEST"
+for lang in "${LANGUAGES_ARRAY[@]}"; do
+  CHILD="$TEMPLATE_SRC/children/$lang"
+  CHILD_ANSWERS_REL=".config/copier/${lang}-answers.yml"
+  CHILD_ANSWERS="$DEST/$CHILD_ANSWERS_REL"
+
+  if [[ -d "$CHILD" ]]; then
+    if [[ -f "$CHILD_ANSWERS" ]]; then
+      copier update --trust --defaults --answers-file "$CHILD_ANSWERS_REL" "$DEST"
+    else
+      copier copy --trust --defaults \
+        --answers-file "$CHILD_ANSWERS_REL" \
+        --data-file "$ANSWERS" \
+        "$CHILD" "$DEST"
+    fi
   fi
-fi
+done

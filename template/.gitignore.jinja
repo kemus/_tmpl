@@ -17,7 +17,7 @@ Thumbs.db
 # Build
 dist/
 build/
-{% if language == 'python' -%}
+{% if 'python' in languages -%}
 
 # Lockfile
 !uv.lock
@@ -28,14 +28,16 @@ __pycache__/
 *.egg-info/
 .venv/
 *.egg
-{% elif language == 'rust' -%}
+{% endif -%}
+{% if 'rust' in languages -%}
 
 # Lockfile
 !Cargo.lock
 
 # Rust
 target/
-{% elif language == 'typescript' -%}
+{% endif -%}
+{% if 'typescript' in languages -%}
 
 # Lockfile
 !package-lock.json

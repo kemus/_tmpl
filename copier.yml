@@ -81,20 +81,23 @@ license:
       MIT
     {%- endif %}
 
-language:
+languages:
   type: str
-  help: Primary language
+  help: Languages to include
+  multiselect: true
   choices:
     Python: python
     Rust: rust
     Lua: lua
     Shell: shell
     TypeScript: typescript
+  default: "{% if language is defined %}[{{ language }}]{% else %}[]{% endif %}"
+  validator: "{% if not languages %}Select at least one language{% endif %}"
 
 python_version:
   type: str
   help: Minimum Python version
-  when: "{{ language == 'python' }}"
+  when: "{{ 'python' in languages }}"
   choices:
     "3.13": "3.13"
     "3.12": "3.12"
@@ -105,7 +108,7 @@ python_version:
 shell_type:
   type: str
   help: Shell dialect
-  when: "{{ language == 'shell' }}"
+  when: "{{ 'shell' in languages }}"
   choices:
     Bash: bash
     POSIX sh: posix
@@ -115,7 +118,7 @@ shell_type:
 shell_test_framework:
   type: str
   help: Test framework
-  when: "{{ language == 'shell' and shell_type == 'bash' }}"
+  when: "{{ 'shell' in languages and shell_type == 'bash' }}"
   choices:
     Bats: bats
     ShellSpec: shellspec
@@ -124,7 +127,7 @@ shell_test_framework:
 ts_test_framework:
   type: str
   help: Test framework
-  when: "{{ language == 'typescript' }}"
+  when: "{{ 'typescript' in languages }}"
   choices:
     "node:test": node
     Vitest: vitest
@@ -151,6 +154,11 @@ use_claude:
 
 # --- Computed variables ---
 
+_language:
+  type: str
+  when: false
+  default: "{{ languages[0] if languages else '' }}"
+
 project_name_kebab:
   type: str
   when: false
@@ -167,7 +175,7 @@ _tasks:
   - >-
     bash {{ _copier_conf.src_path }}/post-task.sh
     {{ _copier_conf.src_path }}
-    {{ language }}
+    '{{ languages | tojson }}'
     {{ use_claude | lower }}
     {{ license }}
     '{{ shell_type | default('') }}'
