@@ -6,74 +6,24 @@
 
 {{ languages | join(', ') }}
 {%- if 'shell' in languages %} ({{ shell_type }}){% endif %}
-
-## Running Checks
-
-```bash
-mise exec -- hk check --fix
-```
-
-## Conventions
-
-- Follow the project's existing code style and patterns
-- Write clear, descriptive commit messages
-- Keep changes focused and minimal
-{% if 'python' in languages %}
-## Python
-
-- Google-style docstrings
-- Strict basedpyright type checking — no `Any`, annotate all class attributes, use `@override`
-- Run tests: `mise exec -- uv run pytest`
-- Run linter: `mise exec -- uv run ruff check src/ tests/`
-- Run formatter: `mise exec -- uv run ruff format src/ tests/`
-- Run type checker: `mise exec -- uv run basedpyright`
-- Package layout: `src/{{ project_slug }}/`
+{% if 'shell' in languages %}
+## Shell ({{ shell_type }})
+{% if shell_type == 'bash' and shell_test_framework == 'bats' %}
+- Tests: BATS (`mise exec -- bats tests/`)
+{% elif shell_type == 'bash' and shell_test_framework == 'shellspec' %}
+- Tests: ShellSpec (`mise exec -- shellspec`)
+{% elif shell_type in ['posix', 'zsh'] %}
+- Tests: ShellSpec (`mise exec -- shellspec`)
 {% endif %}
-{% if 'rust' in languages %}
-## Rust
-
-- Edition 2024
-- Run tests: `mise exec -- cargo test`
-- Run linter: `mise exec -- cargo clippy`
-- Run formatter: `mise exec -- cargo fmt`
 {% endif %}
 {% if 'typescript' in languages %}
 ## TypeScript
 
 - Strict mode enabled
 - ES modules (`"type": "module"`)
-- Run tests: {% if ts_test_framework == 'vitest' %}`npx vitest run`{% else %}`node --experimental-strip-types --test tests/index.test.ts`{% endif %}
-- Run linter: `npx eslint src/ tests/`
-- Run formatter: `npx prettier --write .`
-- Build: `npx tsc`
-{% endif %}
-{% if 'shell' in languages %}
-## Shell ({{ shell_type }})
-{% if shell_type == 'bash' %}
-- Shebang: `#!/usr/bin/env bash`
-- `set -euo pipefail` at top of every script
-- Linters: shellcheck, shfmt
-- Tests: BATS (`mise exec -- bats tests/`)
-{% elif shell_type == 'posix' %}
-- Shebang: `#!/bin/sh`
-- `set -eu` at top of every script
-- Linters: shellcheck, shfmt
-{% elif shell_type == 'zsh' %}
-- Shebang: `#!/usr/bin/env zsh`
-- `set -euo pipefail` at top of every script
-- Syntax check: `zsh -n <file>`
-{% endif %}
 {% endif %}
 {% if 'lua' in languages %}
 ## Lua
 
-- Run tests: `mise exec -- luarocks test` (busted)
-- Run formatter: `mise exec -- stylua .`
-- Run linter: `mise exec -- selene .`
+- Tests: busted (`mise exec -- luarocks test`)
 {% endif %}
-## Project Structure
-
-This project uses:
-- **mise** for dev tool management
-- **hk** for git hooks and checks
-- **GitHub Actions** for CI
