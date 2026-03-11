@@ -1,15 +1,18 @@
 [tools]
 hk = "latest"
-{% if language == 'python' -%}
+{% if 'python' in languages -%}
 python = "{{ python_version }}"
 uv = "latest"
-{% elif language == 'rust' -%}
+{% endif -%}
+{% if 'rust' in languages -%}
 rust = "latest"
-{% elif language == 'lua' -%}
+{% endif -%}
+{% if 'lua' in languages -%}
 lua = "latest"
 stylua = "latest"
 "cargo:selene" = "latest"
-{% elif language == 'shell' -%}
+{% endif -%}
+{% if 'shell' in languages -%}
 {% if shell_type in ['bash', 'posix'] -%}
 shellcheck = "latest"
 "asdf:luizm/asdf-shfmt" = "latest"
@@ -21,6 +24,7 @@ shellspec = "latest"
 {% elif shell_type in ['posix', 'zsh'] -%}
 shellspec = "latest"
 {% endif -%}
-{% elif language == 'typescript' -%}
+{% endif -%}
+{% if 'typescript' in languages -%}
 node = "lts"
 {% endif -%}

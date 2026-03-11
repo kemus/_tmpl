@@ -2,10 +2,10 @@
 
 {{ project_description }}
 
-## Language
+## Languages
 
-{{ language }}
-{%- if language == 'shell' %} ({{ shell_type }}){% endif %}
+{{ languages | join(', ') }}
+{%- if 'shell' in languages %} ({{ shell_type }}){% endif %}
 
 ## Running Checks
 
@@ -18,7 +18,7 @@ mise exec -- hk check --fix
 - Follow the project's existing code style and patterns
 - Write clear, descriptive commit messages
 - Keep changes focused and minimal
-{% if language == 'python' %}
+{% if 'python' in languages %}
 ## Python
 
 - Google-style docstrings
@@ -28,14 +28,16 @@ mise exec -- hk check --fix
 - Run formatter: `mise exec -- uv run ruff format src/ tests/`
 - Run type checker: `mise exec -- uv run basedpyright`
 - Package layout: `src/{{ project_slug }}/`
-{% elif language == 'rust' %}
+{% endif %}
+{% if 'rust' in languages %}
 ## Rust
 
 - Edition 2024
 - Run tests: `mise exec -- cargo test`
 - Run linter: `mise exec -- cargo clippy`
 - Run formatter: `mise exec -- cargo fmt`
-{% elif language == 'typescript' %}
+{% endif %}
+{% if 'typescript' in languages %}
 ## TypeScript
 
 - Strict mode enabled
@@ -44,7 +46,8 @@ mise exec -- hk check --fix
 - Run linter: `npx eslint src/ tests/`
 - Run formatter: `npx prettier --write .`
 - Build: `npx tsc`
-{% elif language == 'shell' %}
+{% endif %}
+{% if 'shell' in languages %}
 ## Shell ({{ shell_type }})
 {% if shell_type == 'bash' %}
 - Shebang: `#!/usr/bin/env bash`
@@ -60,7 +63,8 @@ mise exec -- hk check --fix
 - `set -euo pipefail` at top of every script
 - Syntax check: `zsh -n <file>`
 {% endif %}
-{% elif language == 'lua' %}
+{% endif %}
+{% if 'lua' in languages %}
 ## Lua
 
 - Run tests: `mise exec -- luarocks test` (busted)

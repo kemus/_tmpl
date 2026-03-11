@@ -13,7 +13,9 @@
 ```bash
 mise install --locked
 ```
-{% if language == 'python' %}
+{% if 'python' in languages %}
+## Python
+
 ### Install Dependencies
 
 ```bash
@@ -25,7 +27,10 @@ mise exec -- uv sync
 ```bash
 mise exec -- uv run pytest
 ```
-{% elif language == 'rust' %}
+{% endif %}
+{% if 'rust' in languages %}
+## Rust
+
 ### Build
 
 ```bash
@@ -37,7 +42,10 @@ mise exec -- cargo build
 ```bash
 mise exec -- cargo test
 ```
-{% elif language == 'typescript' %}
+{% endif %}
+{% if 'typescript' in languages %}
+## TypeScript
+
 ### Install Dependencies
 
 ```bash
@@ -59,19 +67,27 @@ node --experimental-strip-types --test tests/index.test.ts
 ```bash
 npx tsc
 ```
-{% elif language == 'shell' and shell_type == 'bash' and shell_test_framework == 'bats' %}
+{% endif %}
+{% if 'shell' in languages and shell_type == 'bash' and shell_test_framework == 'bats' %}
+## Shell
+
 ### Run Tests
 
 ```bash
 mise exec -- bats tests/
 ```
-{% elif language == 'shell' %}
+{% elif 'shell' in languages %}
+## Shell
+
 ### Run Tests
 
 ```bash
 mise exec -- shellspec
 ```
-{% elif language == 'lua' %}
+{% endif %}
+{% if 'lua' in languages %}
+## Lua
+
 ### Run Tests
 
 ```bash
