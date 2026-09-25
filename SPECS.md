@@ -459,8 +459,8 @@ Data values render as Jinja strings; a value that renders to `""` is dropped, wh
 
 ## 12. Migration from the Copier repo
 
-1. Port the good content of `template/`, `children/*`, and `copier.yml` into `templates/` layers and fragments. That covers license selection, the editorconfig options, the current hk steps, and the per-language scaffolds.
-2. Remove `copier.yml`, `extensions.py`, `post-task.sh`, `template/`, and the `children/*` submodules (archive their upstream repos).
+1. Port the good content of `template/` and `copier.yml` into `templates/` layers and fragments. That covers license selection, the editorconfig options, the current hk steps, and the per-language scaffolds.
+2. Remove `copier.yml`, `extensions.py`, `post-task.sh`, and `template/`. The `children/*` submodules are already removed and their upstream repos (`kemus/_tmpl_{python,rust,lua,shell,typescript}`) are to be deleted, not archived. Per-language scaffolds are written fresh from this spec rather than ported.
 3. Adopt this repo itself as a `python/cli` unit.
 4. Adopt existing Copier-generated projects with `tmpl adopt`. Their `.config/copier/*answers*.yml` files seed detection and are then deleted.
 
