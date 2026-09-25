@@ -54,6 +54,8 @@ Each rendered repo combines these template layers:
 
 The old base → language → type chain survives as layers 1–2–5 (`root`, `lang/<lang>`, `lang/<lang>/kind/<kind>`), but it is applied **per unit**, and layers never switch between each other with `if/elif`. They only *add* to shared files through fragments.
 
+A kind whose units are not packages (python `scripts`) sets `package = false` on its `lang/<lang>/kind/<kind>` layer. Such a unit skips `lang/<lang>/unit`, so it gets no package manifest and no workspace membership.
+
 ### 2.3 Desired state and reconcile
 
 Every mutating command follows the same two steps: **change the desired state** (manifest + template version), then **reconcile**.
@@ -220,7 +222,7 @@ Layers never template shared files directly. They declare **fragments** (data) a
 - **Scope:** unit-level ignore patterns go to `<unit>/.gitignore` when the unit isn't at `.`. That keeps the root file small and makes removal trivial.
 - **Dedup:** identical fragments from several units merge. Conflicting values for the same key (e.g. two `python` versions) are a catalog bug, which is why such options are lang-scoped.
 - **Ordering:** hk steps and CI steps carry an `order` so fast checks run first (shellcheck → fmt → clippy → type check → tests).
-- **Workspaces:** a language's workspace root is generated when that language has ≥ 2 units, or 1 unit not at `.`. For python this is a virtual root `pyproject.toml` with `[tool.uv.workspace]` only (or `[tool.uv.workspace]` added to the root package if a unit sits at `.`). The same pattern applies to cargo (virtual manifest vs `[workspace]` in the root package), `go.work`, and JS workspaces.
+- **Workspaces:** a language's workspace root is generated when that language has ≥ 2 units, or 1 unit not at `.`. For python this is a virtual root `pyproject.toml` with `[tool.uv.workspace]` only (or `[tool.uv.workspace]` deep-merged into the root package if a unit sits at `.`). Members come from `lang/<lang>/unit`, so units with `package = false` (§2.2) are never members; a member's manifest omits `readme` unless the unit sits at `.`. The same pattern applies to cargo (virtual manifest vs `[workspace]` in the root package), `go.work`, and JS workspaces.
 - **Tasks contract:** every language contributes `lint`, `fmt`, and `test` tasks namespaced by language (`test:python`). The root defines `check` (`hk check --all`, depending on `test:*`) and `fix` (`hk fix --all`). CI runs `mise run check` in one job with `HK_PROFILE=slow`.
 - **Tool resolution:** hk 2.1 builtins run structured argv and reject a shell `prefix`, so steps never wrap commands. Each language puts its tools on `PATH` through mise instead; python contributes `_.python.venv = {path = ".venv", create = true}` to `mise.env`, so ruff and the type checkers resolve from the project venv.
 - **Hooks:** a step lists the hooks it joins. `pre-commit` and `fix` run with `fix = true`; a `slow` step joins `check` only under the `slow` profile (CI), while `pre-push` always runs it.
@@ -349,23 +351,23 @@ Reconciles the current manifest at the current version, e.g. after a hand edit o
 
 Runs after `init`, and optionally after `adopt`/`add`/`update` (`--setup`):
 - `mise trust`, `mise install`, `mise lock`
-- per language: `uv sync`, `cargo fetch`, `go mod download`, `pnpm install` / `bun install` / `npm install`
+- per language: `uv sync --all-packages`, `cargo fetch`, `go mod download`, `pnpm install` / `bun install` / `npm install`
 - `hk install`
 
-Language commands come from each language layer's top-level `setup = [["uv", "sync"]]` and run through `mise exec --`. `init` commits the scaffold with `--no-verify`, since `hk install` has just enabled hooks on generated files.
+Language commands come from each language layer's top-level `setup = [["uv", "sync", "--all-packages"]]` and run through `mise exec --`. `init` commits the scaffold with `--no-verify`, since `hk install` has just enabled hooks on generated files.
 
 ## 9. Detection (adopt)
 
 | Lang | Signals | Kind inference | Options inferred |
 |---|---|---|---|
-| python | `pyproject.toml`; PEP 723 `# /// script` blocks | `[project.scripts]` → cli, else lib; ask when both apply; dir of PEP 723 files → scripts | type checkers from dev deps / `[tool.*]` tables; `[tool.uv.workspace]` members → one unit each |
+| python | `pyproject.toml`; PEP 723 `# /// script` blocks | `[project.scripts]` → cli, else lib; ask when both apply; dir of PEP 723 files → scripts; a pyproject that is not a package (no `[build-system]`, or `tool.uv.package = false`, as uv decides) → no unit, with a warning | type checkers from dev deps / `[tool.*]` tables; `[tool.uv.workspace]` members → one unit each |
 | rust | `Cargo.toml` | `src/main.rs` / `[[bin]]` → cli; `src/lib.rs` → lib; ask when both | `[workspace] members` → one unit each |
 | go | `go.mod` | `package main` → cli, else lib | `go.work` `use` entries → one unit each |
 | ts | `package.json` | `bin` → cli; vite/next deps → webapp; else lib | package manager from lockfile or `packageManager`; test runner from devDeps |
 | bash / zsh / sh | shebangs (`bash`, `zsh`, `sh`/`dash`), `*.sh`, `*.zsh`, `*.plugin.zsh` | dir of scripts → scripts; `*.plugin.zsh` → plugin | test framework from `*.bats` / `spec/` |
 | lua | `*.rockspec`, `lua/<name>/` + `plugin/` | nvim layout → plugin; rockspec → lib | runtime |
 
-The tool also detects existing mise, hk, and CI config and maps it into the reconcile (never deletes it). Paths under `third_party/`, `node_modules/`, `target/`, `.venv/`, and vendored dirs are skipped.
+The tool also detects existing mise, hk, and CI config and maps it into the reconcile (never deletes it). Tool config tmpl would duplicate rather than merge (a second mise or hk config, or `ruff.toml`, `mypy.ini`, `pytest.ini`/`pytest.toml`, `ty.toml`, `pyrightconfig.json`, `basedpyright.json` at the root or in `.config/`, where tmpl configures these tools in `pyproject.toml`) is reported for the user to fold in by hand. Paths under `third_party/`, `node_modules/`, `target/`, hidden dirs (including `.venv/`), `vendor/`/`vendors/`, and nested repos (any dir holding `.git`) are skipped. PEP 723 dirs inside a package unit (its `src/` and `tests/` for a unit at `.`) are not separate units, and one at the same path as a package unit is reported instead of adopted.
 
 ## 10. Versioning and base rendering
 
@@ -444,6 +446,11 @@ scaffold = true
 [[patch]]                       # deep-merged into a TOML file another layer renders at the same placement
 dest = "pyproject.toml"
 data = { project = { dependencies = ["cyclopts"], scripts = { "{{ unit.name }}" = "{{ unit.slug }}.cli:main" } } }
+```
+
+```toml
+# templates/lang/python/kind/scripts/template.toml
+package = false                 # not a package: skip lang/python/unit (§2.2)
 ```
 
 Data values render as Jinja strings; a value that renders to `""` is dropped, which is how optional keys (like `builtin` above) disappear.
