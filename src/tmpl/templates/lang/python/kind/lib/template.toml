@@ -1,0 +1,13 @@
+# python × lib: an importable, typed package.
+
+[files."**"]
+policy = "seed"
+scaffold = true
+
+[[fragment]]
+sink = "readme.sections"
+order = 10
+data = { title = "Usage", body = """
+```python
+from {{ unit.slug }}.core import greet
+```""" }

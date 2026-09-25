@@ -24,7 +24,7 @@ def test_init_creates_committed_scaffold(tmp_path: Path) -> None:
     assert recorded.root["author"] == "Test User"
     assert [(u.path, u.lang, u.kind) for u in recorded.unit] == [(".", "python", "cli")]
     assert (repo / "src/new_tool/cli.py").exists()
-    assert (repo / "tests/test_cli.py").exists()
+    assert (repo / "tests/test_new_tool_cli.py").exists()
     assert tomllib.loads((repo / "pyproject.toml").read_text())["project"]["name"] == "new-tool"
 
     assert git(repo, "status", "--porcelain") == ""

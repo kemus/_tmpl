@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "{{ description }}"
 {% if author %}authors = [{ name = "{{ author }}" }]
 {% endif %}license = "{{ license }}"
-readme = "README.md"
-requires-python = ">={{ python_version }}"
+{% if unit.path == "." %}readme = "README.md"
+{% endif %}requires-python = ">={{ python_version }}"
 dependencies = []
 
 [build-system]

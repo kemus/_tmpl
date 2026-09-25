@@ -1,0 +1,5 @@
+from {{ unit.slug }}.core import greet
+
+
+def test_greet() -> None:
+    assert greet("tmpl") == "Hello, tmpl!"

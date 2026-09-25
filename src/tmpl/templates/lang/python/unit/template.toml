@@ -11,3 +11,7 @@ scaffold = true
 
 [merge."pyproject.toml"]
 set_like = { "project.dependencies" = "requirement", "dependency-groups.*" = "requirement", "tool.ruff.lint.ignore" = "exact", "tool.uv.workspace.members" = "exact" }
+
+[[fragment]]
+sink = "workspace.python"
+data = { member = "{{ unit.path }}" }

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import posixpath
 import re
+import tomllib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -152,7 +153,12 @@ def render(manifest: Manifest, repo_name: str, live_root: Path | None = None) ->
             data = msgspec.convert(_render_data(env, patch.data, inst.context), dict[str, object])
             patches.append((join(inst.placement, patch.dest), data))
     ordered = {sink: [f for _, _, f in sorted(items, key=lambda t: t[:2])] for sink, items in frags.items()}
-    tree.update(_run_sinks(ordered, root_ctx))
+    for path, file in _run_sinks(ordered, root_ctx).items():
+        # A sink landing on a rendered TOML file (the workspace table on a root package) patches it.
+        if path in tree and path.endswith(".toml"):
+            _apply_patch(tree, path, tomllib.loads(file.content))
+        else:
+            tree[path] = file
     for path, data in patches:
         _apply_patch(tree, path, data)
     return {path: _tidy(path, f) for path, f in sorted(tree.items())}

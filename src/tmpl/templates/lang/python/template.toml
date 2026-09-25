@@ -1,6 +1,6 @@
 # Python language layer: applied once when any python unit exists.
 
-setup = [["uv", "sync"]]
+setup = [["uv", "sync", "--all-packages"]]
 
 [options.python_version]
 scope = "lang"

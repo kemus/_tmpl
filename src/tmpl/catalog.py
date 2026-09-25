@@ -70,6 +70,9 @@ class LayerSpec(msgspec.Struct, forbid_unknown_fields=True):
     merge: dict[str, MergeRule] = msgspec.field(default_factory=dict[str, MergeRule])
     # Commands run by setup (§8.9) through `mise exec --`, once per layer in the repo.
     setup: list[list[str]] = msgspec.field(default_factory=list[list[str]])
+    # On a lang-by-kind layer: false for kinds that are not packages (scripts). They skip the
+    # language's unit layer, and with it the manifest file and workspace membership.
+    package: bool = True
 
 
 @dataclass(frozen=True)
@@ -100,7 +103,9 @@ def layer(layer_id: str) -> Layer | None:
 
 
 def unit_layer_ids(lang: str, kind: str) -> list[str]:
-    return [f"lang/{lang}/unit", f"kind/{kind}", f"lang/{lang}/kind/{kind}"]
+    ids = [f"lang/{lang}/unit", f"kind/{kind}", f"lang/{lang}/kind/{kind}"]
+    found = layer(ids[-1])
+    return ids if found is None or found.spec.package else ids[1:]
 
 
 def supported(lang: str, kind: str) -> bool:

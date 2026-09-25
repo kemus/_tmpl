@@ -1,0 +1,13 @@
+# Scripts sit outside any package, so they carry their own ruff settings.
+target-version = "py{{ python_version | replace('.', '') }}"
+line-length = {{ max_line_length }}
+
+[lint]
+select = ["ALL"]
+ignore = [
+  "D",       # pydocstyle — not enforced
+  "COM812",  # trailing comma — conflicts with formatter
+  "ISC001",  # implicit string concat — conflicts with formatter
+  "CPY001",  # copyright header — the LICENSE file covers the repo
+  "INP001",  # scripts are not a package
+]

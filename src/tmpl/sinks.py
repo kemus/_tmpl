@@ -214,6 +214,16 @@ def agents(frags: list[Frag], _ctx: dict[str, object]) -> list[SinkFile]:
     return [SinkFile("AGENTS.md", "# AGENTS.md\n" + _sections(frags))]
 
 
+def python_workspace(frags: list[Frag], _ctx: dict[str, object]) -> list[SinkFile]:
+    """A uv workspace once a python unit sits off `.`; render patches it into a root package's pyproject."""
+    members = sorted({str(f.data["member"]) for f in frags} - {"."})
+    if not members:
+        return []
+    doc = tomlkit.document()
+    doc.add("tool", {"uv": {"workspace": {"members": members}}})
+    return [SinkFile("pyproject.toml", tomlkit.dumps(doc))]
+
+
 SINKS: dict[str, Sink] = {
     "hk.steps": hk,
     "ci.steps": ci,
@@ -221,5 +231,6 @@ SINKS: dict[str, Sink] = {
     "editorconfig": editorconfig,
     "readme.sections": readme,
     "agents.sections": agents,
+    "workspace.python": python_workspace,
 }
 MISE_SINKS = ("mise.tools", "mise.env", "mise.tasks")

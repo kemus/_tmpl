@@ -1,0 +1,15 @@
+# /// script
+# requires-python = ">={{ python_version }}"
+# dependencies = []
+# ///
+"""Example script; run it with `uv run --script`."""
+
+import sys
+
+
+def main() -> None:
+    _ = sys.stdout.write("hello\n")
+
+
+if __name__ == "__main__":
+    main()

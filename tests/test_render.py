@@ -25,7 +25,7 @@ def test_python_cli_tree() -> None:
         "pyproject.toml",
         "src/demo_tool/__init__.py",
         "src/demo_tool/cli.py",
-        "tests/test_cli.py",
+        "tests/test_demo_tool_cli.py",
         "third_party/.gitkeep",
     } <= set(tree)
     assert tree["src/demo_tool/cli.py"].scaffold

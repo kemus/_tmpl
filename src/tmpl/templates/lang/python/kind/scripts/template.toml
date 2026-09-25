@@ -1,0 +1,17 @@
+# python × scripts: standalone PEP 723 files run with `uv run --script`, not a package.
+
+package = false
+
+[files."*.py"]
+policy = "seed"
+scaffold = true
+
+[[fragment]]
+sink = "readme.sections"
+order = 30
+data = { title = "Scripts", body = """
+Each file in `{{ unit.path }}/` declares its dependencies inline (PEP 723):
+
+```sh
+uv run --script {{ unit.path }}/example.py
+```""" }
