@@ -352,6 +352,8 @@ Runs after `init`, and optionally after `adopt`/`add`/`update` (`--setup`):
 - per language: `uv sync`, `cargo fetch`, `go mod download`, `pnpm install` / `bun install` / `npm install`
 - `hk install`
 
+Language commands come from each language layer's top-level `setup = [["uv", "sync"]]` and run through `mise exec --`. `init` commits the scaffold with `--no-verify`, since `hk install` has just enabled hooks on generated files.
+
 ## 9. Detection (adopt)
 
 | Lang | Signals | Kind inference | Options inferred |

@@ -68,6 +68,8 @@ class LayerSpec(msgspec.Struct, forbid_unknown_fields=True):
     fragment: list[Fragment] = msgspec.field(default_factory=list[Fragment])
     patch: list[Patch] = msgspec.field(default_factory=list[Patch])
     merge: dict[str, MergeRule] = msgspec.field(default_factory=dict[str, MergeRule])
+    # Commands run by setup (§8.9) through `mise exec --`, once per layer in the repo.
+    setup: list[list[str]] = msgspec.field(default_factory=list[list[str]])
 
 
 @dataclass(frozen=True)
