@@ -5,7 +5,6 @@ from __future__ import annotations
 import io
 import json
 import re
-import subprocess
 import tempfile
 from collections.abc import Callable, Mapping, MutableMapping, MutableSequence, Sequence
 from dataclasses import dataclass, field
@@ -16,10 +15,9 @@ from typing import TYPE_CHECKING, Literal
 import msgspec
 import tomlkit
 
-from tmpl import catalog
+from tmpl import catalog, proc
 from tmpl.catalog import MergeRule
 from tmpl.docs import is_map, is_seq, plain
-from tmpl.proc import executable
 from tmpl.sinks import yaml
 
 if TYPE_CHECKING:
@@ -342,10 +340,10 @@ def merge_text(base: str | None, ours: str, theirs: str, prefer: Prefer | None =
             file = Path(tmp) / name
             file.write_text(content)
             files.append(str(file))
-        args = [executable("git"), "merge-file", "-p", "-L", "ours", "-L", "base", "-L", "template"]
+        args = ["git", "merge-file", "-p", "-L", "ours", "-L", "base", "-L", "template"]
         if prefer is not None:
             args.append("--ours" if prefer == "ours" else "--theirs")
-        proc = subprocess.run([*args, *files], capture_output=True, text=True, check=False)  # noqa: S603 — fixed argv, resolved executable, no shell
-    if not 0 <= proc.returncode <= MAX_CONFLICTS:
-        raise RuntimeError(proc.stderr)
-    return Merged(proc.stdout, conflict=proc.returncode > 0)
+        result = proc.run(*args, *files)
+    if not 0 <= result.returncode <= MAX_CONFLICTS:
+        raise RuntimeError(result.stderr)
+    return Merged(result.stdout, conflict=result.returncode > 0)

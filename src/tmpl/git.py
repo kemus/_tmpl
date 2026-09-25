@@ -1,12 +1,11 @@
-"""The few git operations tmpl needs, via subprocess."""
+"""The few git operations tmpl needs."""
 
 from __future__ import annotations
 
-import subprocess
 from typing import TYPE_CHECKING
 
+from tmpl import proc
 from tmpl.manifest import MANIFEST_PATH
-from tmpl.proc import executable
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -17,10 +16,10 @@ class GitError(Exception):
 
 
 def run(repo: Path, *args: str) -> str:
-    proc = subprocess.run([executable("git"), "-C", str(repo), *args], capture_output=True, text=True, check=False)  # noqa: S603 — fixed argv, resolved executable, no shell
-    if proc.returncode != 0:
-        raise GitError(proc.stderr.strip() or f"git {' '.join(args)} failed")
-    return proc.stdout
+    result = proc.run("git", "-C", str(repo), *args)
+    if result.returncode != 0:
+        raise GitError(result.stderr.strip() or f"git {' '.join(args)} failed")
+    return result.stdout
 
 
 def is_repo(repo: Path) -> bool:
