@@ -1,0 +1,24 @@
+[project]
+name = "legacy-tool"
+version = "1.4.2"
+description = "A tool that predates tmpl"
+authors = [{ name = "Legacy Author" }]
+license = "MIT"
+requires-python = ">=3.13"
+dependencies = ["cyclopts>=4", "httpx"]
+
+[project.scripts]
+legacy-tool = "legacy_tool.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+strict = true
+
+[dependency-groups]
+dev = ["pytest>=8", "mypy>=1.10", "ruff"]

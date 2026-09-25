@@ -1,0 +1,55 @@
+[project]
+name = "{{ unit.name }}"
+version = "0.1.0"
+description = "{{ description }}"
+{% if author %}authors = [{ name = "{{ author }}" }]
+{% endif %}license = "{{ license }}"
+readme = "README.md"
+requires-python = ">={{ python_version }}"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/{{ unit.slug }}"]
+
+[tool.ruff]
+target-version = "py{{ python_version | replace('.', '') }}"
+line-length = {{ max_line_length }}
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D",       # pydocstyle — not enforced
+  "COM812",  # trailing comma — conflicts with formatter
+  "ISC001",  # implicit string concat — conflicts with formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+{% set checkers = [type_checker_fast, type_checker_thorough] | unique | reject("equalto", "none") | list %}
+{% if "basedpyright" in checkers %}
+[tool.basedpyright]
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+{% endif %}{% if "pyright" in checkers %}
+[tool.pyright]
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+{% endif %}{% if "mypy" in checkers %}
+[tool.mypy]
+strict = true
+{% endif %}
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+strict = true
+
+[dependency-groups]
+dev = [
+{% for dep in (["pytest", "ruff"] + checkers) | sort %}  "{{ dep }}",
+{% endfor %}]

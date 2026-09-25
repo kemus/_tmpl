@@ -1,0 +1,5 @@
+from {{ unit.slug }}.cli import app
+
+
+def test_hello() -> None:
+    assert app(["--name", "tmpl"], result_action="return_value") == "Hello, tmpl!"

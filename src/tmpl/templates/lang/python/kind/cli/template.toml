@@ -1,0 +1,10 @@
+# python × cli: a cyclopts app.
+
+[files."**"]
+policy = "seed"
+scaffold = true
+
+[[patch]]
+dest = "pyproject.toml"
+data.project.dependencies = ["cyclopts"]
+data.project.scripts = { "{{ unit.name }}" = "{{ unit.slug }}.cli:main" }

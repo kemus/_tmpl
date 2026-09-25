@@ -1,0 +1,106 @@
+# Root layer: applied once per repo, files land at the repo root.
+
+[options.description]
+scope = "root"
+default = ""
+
+[options.author]
+scope = "root"
+default = ""
+
+[options.license]
+scope = "root"
+choices = ["MIT"]
+default = "MIT"
+
+[options.indent]
+scope = "root"
+choices = ["2", "4", "tab"]
+default = "2"
+
+[options.max_line_length]
+scope = "root"
+type = "int"
+default = 120
+
+[files.".omni/.gitkeep"]
+policy = "seed"
+
+[files."third_party/.gitkeep"]
+policy = "seed"
+force_add = true
+
+[[fragment]]
+sink = "mise.tools"
+data = { hk = "latest" }
+
+[[fragment]]
+sink = "mise.tasks"
+data.check = { description = "Run all linters and tests", run = "hk check --all", depends = ["test:*"] }
+data.fix = { description = "Apply all autofixes", run = "hk fix --all" }
+
+[[fragment]]
+sink = "hk.steps"
+order = 0
+data = { name = "check_merge_conflict", builtin = "check_merge_conflict", hooks = ["pre-commit", "check"] }
+
+[[fragment]]
+sink = "hk.steps"
+order = 1
+data = { name = "trailing_whitespace", builtin = "trailing_whitespace", hooks = ["pre-commit", "check", "fix"] }
+
+[[fragment]]
+sink = "hk.steps"
+order = 2
+data = { name = "newlines", builtin = "newlines", hooks = ["pre-commit", "check", "fix"] }
+
+[[fragment]]
+sink = "ci.steps"
+order = 0
+data = { uses = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", comment = "v7.0.1" }
+
+[[fragment]]
+sink = "ci.steps"
+order = 1
+data = { uses = "jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c", comment = "v4.3.0" }
+
+[[fragment]]
+sink = "ci.steps"
+order = 100
+data = { run = "mise run check", env = { HK_PROFILE = "slow" } }
+
+[[fragment]]
+sink = "gitignore"
+order = 0
+data = { heading = "Environment", lines = [".env", ".env.*", "!.env.example"] }
+
+[[fragment]]
+sink = "gitignore"
+order = 1
+data = { heading = "OS", lines = [".DS_Store", "Thumbs.db"] }
+
+[[fragment]]
+sink = "gitignore"
+order = 2
+data = { heading = "Editor", lines = ["*.swp", "*.swo", "*~", ".idea/", ".vscode/"] }
+
+[[fragment]]
+sink = "gitignore"
+order = 3
+data = { heading = "Vendored checkouts", lines = ["/third_party/"] }
+
+[[fragment]]
+sink = "editorconfig"
+order = 0
+data."*" = { end_of_line = "lf", insert_final_newline = "true", trim_trailing_whitespace = "true", charset = "utf-8", max_line_length = "{{ max_line_length }}", indent_style = "{{ 'tab' if indent == 'tab' else 'space' }}", indent_size = "{{ '' if indent == 'tab' else indent }}" }
+
+[[fragment]]
+sink = "agents.sections"
+order = 0
+data = { title = "Commands", body = """
+- `mise run check`: all linters and tests (what CI runs)
+- `mise run fix`: apply autofixes
+- Run tools through `mise exec --`.""" }
+
+[files."LICENSE"]
+policy = "seed"

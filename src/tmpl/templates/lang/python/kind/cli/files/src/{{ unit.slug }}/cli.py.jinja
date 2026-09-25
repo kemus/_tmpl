@@ -1,0 +1,13 @@
+from cyclopts import App
+
+app = App(help="{{ description }}")
+
+
+@app.default
+def hello(name: str = "world") -> str:
+    """Greet NAME."""
+    return f"Hello, {name}!"
+
+
+def main() -> None:
+    app()

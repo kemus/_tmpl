@@ -1,0 +1,9 @@
+# cli kind: language-agnostic parts of every cli unit.
+
+[[fragment]]
+sink = "readme.sections"
+order = 10
+data = { title = "Usage", body = """
+```sh
+{{ unit.name }} --help
+```""" }
