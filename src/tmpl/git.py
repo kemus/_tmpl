@@ -17,7 +17,7 @@ class GitError(Exception):
 
 
 def run(repo: Path, *args: str) -> str:
-    proc = subprocess.run([executable("git"), "-C", str(repo), *args], capture_output=True, text=True, check=False)
+    proc = subprocess.run([executable("git"), "-C", str(repo), *args], capture_output=True, text=True, check=False)  # noqa: S603 — fixed argv, resolved executable, no shell
     if proc.returncode != 0:
         raise GitError(proc.stderr.strip() or f"git {' '.join(args)} failed")
     return proc.stdout

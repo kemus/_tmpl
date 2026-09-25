@@ -16,7 +16,7 @@ def isolated_git(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.M
 
 
 def git(repo: Path, *args: str) -> str:
-    return subprocess.run(
+    return subprocess.run(  # noqa: S603 — fixed argv, resolved executable, no shell
         [executable("git"), "-C", str(repo), *args], check=True, capture_output=True, text=True
     ).stdout
 

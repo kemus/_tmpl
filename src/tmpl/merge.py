@@ -345,7 +345,7 @@ def merge_text(base: str | None, ours: str, theirs: str, prefer: Prefer | None =
         args = [executable("git"), "merge-file", "-p", "-L", "ours", "-L", "base", "-L", "template"]
         if prefer is not None:
             args.append("--ours" if prefer == "ours" else "--theirs")
-        proc = subprocess.run([*args, *files], capture_output=True, text=True, check=False)
+        proc = subprocess.run([*args, *files], capture_output=True, text=True, check=False)  # noqa: S603 — fixed argv, resolved executable, no shell
     if not 0 <= proc.returncode <= MAX_CONFLICTS:
         raise RuntimeError(proc.stderr)
     return Merged(proc.stdout, conflict=proc.returncode > 0)

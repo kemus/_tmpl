@@ -154,7 +154,7 @@ def _render_base(recorded: Manifest, repo: Path) -> Tree:
         out = Path(tmp) / "out"
         spec = f"{source}@v{recorded.version}"
         cmd = [proc.executable("uvx"), "--from", spec, "tmpl", "render", "--repo", str(repo), "--out", str(out)]
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True)  # noqa: S603 — fixed argv, resolved executable, no shell
         index = json.loads((out / RENDER_INDEX).read_text())
         return {path: RenderedFile((out / path).read_text(), **meta) for path, meta in index.items()}
 
