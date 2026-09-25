@@ -207,7 +207,7 @@ Layers never template shared files directly. They declare **fragments** (data) a
 | Sink | File | Fragment shape | Extension point for user additions |
 |---|---|---|---|
 | `mise.tools` / `mise.env` / `mise.tasks` | `.config/mise/config.toml` | key → value / task table | `.config/mise/conf.d/*.toml`, task files in `.config/mise/tasks/` |
-| `hk.steps` | `.config/hk.pkl` | `{name, builtin?, prefix?, glob?, check?, fix?, order}` or raw pkl | none: edit `hk.pkl` directly; updates arrive through 3-way text merge |
+| `hk.steps` | `.config/hk.pkl` | `{name, builtin?, glob?, check?, fix?, hooks, slow?}` | none: edit `hk.pkl` directly; updates arrive through 3-way text merge |
 | `ci.steps` | `.github/workflows/ci.yml` | step objects | additional workflow files |
 | `gitignore` | root `.gitignore` or `<unit>/.gitignore` | lines, grouped by heading | extra lines (line-set merge, §7.3) |
 | `editorconfig` | `.editorconfig` | `{glob: {key: value}}` | extra sections (structured merge) |
@@ -221,7 +221,9 @@ Layers never template shared files directly. They declare **fragments** (data) a
 - **Dedup:** identical fragments from several units merge. Conflicting values for the same key (e.g. two `python` versions) are a catalog bug, which is why such options are lang-scoped.
 - **Ordering:** hk steps and CI steps carry an `order` so fast checks run first (shellcheck → fmt → clippy → type check → tests).
 - **Workspaces:** a language's workspace root is generated when that language has ≥ 2 units, or 1 unit not at `.`. For python this is a virtual root `pyproject.toml` with `[tool.uv.workspace]` only (or `[tool.uv.workspace]` added to the root package if a unit sits at `.`). The same pattern applies to cargo (virtual manifest vs `[workspace]` in the root package), `go.work`, and JS workspaces.
-- **Tasks contract:** every language contributes `lint`, `fmt`, and `test` tasks namespaced by language (`test:python`). The root defines `check` (hk check + all tests) and `fix`. CI runs `mise run check` in one job.
+- **Tasks contract:** every language contributes `lint`, `fmt`, and `test` tasks namespaced by language (`test:python`). The root defines `check` (`hk check --all`, depending on `test:*`) and `fix` (`hk fix --all`). CI runs `mise run check` in one job with `HK_PROFILE=slow`.
+- **Tool resolution:** hk 2.1 builtins run structured argv and reject a shell `prefix`, so steps never wrap commands. Each language puts its tools on `PATH` through mise instead; python contributes `_.python.venv = {path = ".venv", create = true}` to `mise.env`, so ruff and the type checkers resolve from the project venv.
+- **Hooks:** a step lists the hooks it joins. `pre-commit` and `fix` run with `fix = true`; a `slow` step joins `check` only under the `slow` profile (CI), while `pre-push` always runs it.
 
 ## 6. Files and policies
 
@@ -273,7 +275,14 @@ For each key path in base ∪ ours ∪ theirs:
 
 Arrays are atomic by default. Arrays declared set-like in the catalog (workspace members, `extend-exclude`, …) use set merge. Edits apply to *ours'* document so formatting and comments survive.
 
-Conflicted keys keep ours' value, and the handler wraps that key's lines in git-style markers with theirs' rendering. The file is intentionally invalid until resolved, the same way a git conflict is.
+Any key-level conflict makes the handler fall back to a whole-file `git merge-file` of the three texts, so the git-style markers land in context. The file is intentionally invalid until resolved, the same way a git conflict is.
+
+A layer declares set-like arrays per file name, keyed by glob over the dotted key path. Identity is either the exact value or, for dependency lists, the normalized requirement name, so `pytest>=8` in ours matches `pytest` in theirs and keeps ours' text:
+
+```toml
+[merge."pyproject.toml"]
+set_like = { "project.dependencies" = "requirement", "dependency-groups.*" = "requirement", "tool.uv.workspace.members" = "exact" }
+```
 
 ### 7.3 Conflicts
 
@@ -284,7 +293,8 @@ Conflicted keys keep ours' value, and the handler wraps that key's lines in git-
 
 - Structured files: keys only in theirs are added. Differing values **keep ours and are reported** (`--prefer template` flips this).
 - Line-set files: union.
-- Text files: whole-file conflict unless identical. `--prefer ours|template` resolves it without markers.
+- Text files: whole-file conflict unless identical. `--prefer ours|template` resolves it without markers. `--prefer` only ever applies when there is no base; a real 3-way conflict always gets markers.
+- Scaffold files (`scaffold = true`, e.g. a unit's `src/**`) are never created by adopt: an existing project already has its own layout.
 
 ## 8. Commands
 
@@ -300,7 +310,7 @@ Every mutating command refuses to run on a dirty worktree (`--allow-dirty` overr
 
 ### 8.2 `tmpl adopt [PATH]` — priority feature
 
-1. **Detect** (§9) → proposed manifest; show it and confirm, or `--yes`. `--plan` writes the manifest and stops, so it can be edited before `tmpl sync`.
+1. **Detect** (§9) → proposed manifest; show it and confirm, or `--yes`. `--plan` writes the manifest **without a `version`** and stops, so it can be edited first; `tmpl sync` on a versionless manifest reconciles against base = ∅, exactly like adopt.
 2. **Reconcile** with base = ∅ (§7.4). Never touch `seed` files that already exist; only config and tooling are reconciled.
 3. **Record** the manifest. From here on, the base is `render(manifest, version)`, not the user's file. Existing differences therefore count as intentional edits, and future updates bring in only template changes.
 4. Optionally run setup. Adopt never commits.
@@ -358,7 +368,7 @@ The tool also detects existing mise, hk, and CI config and maps it into the reco
 ## 10. Versioning and base rendering
 
 - `tmpl` releases are semver git tags (`v0.1.0`, …) on this repo. Templates ship inside the Python package, so a tag pins the tool and its templates together.
-- The old base is rendered by **the old release itself**: `uvx --from git+<source>@v<old> tmpl render --manifest … --out <tmp>`. Rendering logic changes between versions can't corrupt the base. uv's cache keeps repeated updates cheap and makes them work offline after the first run.
+- The old base is rendered by **the old release itself**: `uvx --from git+<source>@v<old> tmpl render <tmp> --repo <repo>`, which writes the tree plus a `.tmpl-render.json` index of each file's policy. Rendering logic changes between versions can't corrupt the base. uv's cache keeps repeated updates cheap and makes them work offline after the first run.
 - `render` is the internal, side-effect-free primitive: manifest in, file tree out. Every other command is built on it, and it is the stable contract between versions.
 
 ## 11. Implementation
@@ -377,11 +387,13 @@ src/tmpl/
   manifest.py                     # .config/tmpl.toml model + live-sourced options
   catalog.py                      # loads templates/, validates matrix + options
   render.py                       # manifest → in-memory file tree
-  sinks/                          # mise, hk, ci, gitignore, editorconfig, workspace, markdown
-  merge/                          # toml, yaml, json, lineset, ini, text (git merge-file)
+  sinks.py                        # mise, hk, ci, gitignore, editorconfig, workspace, markdown
+  merge.py                        # toml, yaml, json, lineset, ini, text (git merge-file)
   reconcile.py                    # base/ours/target → actions, conflicts, report
+  docs.py                         # type guards over parsed documents
+  git.py, proc.py                 # subprocess helpers
   detect/                         # per-language adopt detectors
-  setup.py                        # post-render setup runners
+  setup.py                        # post-render setup runners (not in the prototype)
   templates/
     root/{template.toml, files/}
     lang/<lang>/{template.toml, files/, unit/, kind/<kind>/}
@@ -392,42 +404,47 @@ tests/
 
 ### 11.3 Layer definition (`template.toml`)
 
+A layer is a directory with an optional `template.toml` and an optional `files/` tree. Everything under `files/` renders at the layer's placement (the repo root, or the unit's path for unit layers). Path segments are Jinja templates, and a `.jinja` suffix marks content to render and is stripped. Files are `merge` unless a `[files."<glob>"]` rule says otherwise.
+
 ```toml
 # templates/lang/python/template.toml
 [options.python_version]
 scope = "lang"
-choices = ["3.12", "3.13", "3.14"]
 default = "3.14"
-source = "pyproject.toml:project.requires-python"
+source = "pyproject.toml:project.requires-python"   # live-sourced: read from the repo, never stored
+source_pattern = '(\d+\.\d+)'
 
 [options.type_checker_fast]
 scope = "lang"
 choices = ["basedpyright", "pyright", "ty", "mypy", "none"]
 default = "basedpyright"
 
-[options.type_checker_thorough]
-scope = "lang"
-choices = ["basedpyright", "pyright", "ty", "mypy", "none"]
-default = "mypy"
+[vars]                          # constants merged into the render context
+checker_builtin = { ty = "ty", mypy = "mypy" }
 
-[[files]]                      # src is relative to lang/python/; unit/ files render at each unit's path, so dest is unit-relative
-src = "unit/pyproject.toml.jinja"
-dest = "pyproject.toml"
-policy = "merge"
+[[fragment]]
+sink = "mise.tools"
+data = { python = "{{ python_version }}", uv = "latest" }
 
-[fragments."mise.tools"]
-python = "{{ python_version }}"
-uv = "latest"
-
-[[fragments."hk.steps"]]
-name = "ruff"
-builtin = "ruff"
-prefix = "mise exec -- uv run "
-order = 30
-
-[fragments.gitignore]
-Python = ["__pycache__/", "*.py[cod]", "*.egg-info/", ".venv/"]
+[[fragment]]
+sink = "hk.steps"
+order = 40                      # sorts within the sink; ties keep layer order
+when = "{{ type_checker_fast != 'none' }}"   # rendered; the fragment applies when it is "True"
+data = { name = "{{ type_checker_fast }}", builtin = "{{ checker_builtin.get(type_checker_fast, '') }}", hooks = ["pre-commit", "check"] }
 ```
+
+```toml
+# templates/lang/python/kind/cli/template.toml
+[files."**"]                    # every file of this layer is scaffold source
+policy = "seed"
+scaffold = true
+
+[[patch]]                       # deep-merged into a TOML file another layer renders at the same placement
+dest = "pyproject.toml"
+data = { project = { dependencies = ["cyclopts"], scripts = { "{{ unit.name }}" = "{{ unit.slug }}.cli:main" } } }
+```
+
+Data values render as Jinja strings; a value that renders to `""` is dropped, which is how optional keys (like `builtin` above) disappear.
 
 ### 11.4 Testing
 
