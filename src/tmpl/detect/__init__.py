@@ -14,15 +14,17 @@ from tmpl.manifest import Manifest, Options, Unit
 if TYPE_CHECKING:
     from pathlib import Path
 
-SKIP_DIRS = frozenset({".git", "third_party", "node_modules", "target", ".venv", "vendor", "dist", "build"})
-
 # Config tmpl would duplicate instead of merge; reported so the user can fold it in by hand.
 FOREIGN_CONFIG = (
     "mise.toml",
     ".mise.toml",
     ".config/mise.toml",
+    ".mise/config.toml",
     "hk.pkl",
     ".github/workflows/check.yml",
+    # Tool config outside pyproject.toml, where tmpl configures these tools.
+    *(f"{d}{f}" for d in ("", ".config/") for f in ("ruff.toml", "mypy.ini", "pytest.ini", "pytest.toml", "ty.toml")),
+    *(f"{d}{f}" for d in ("", ".config/") for f in ("pyrightconfig.json", "basedpyright.json")),
 )
 
 
@@ -40,7 +42,7 @@ def detect(repo: Path) -> Detected:
     found = python.detect(repo)
     if not found.units:
         msg = "no supported units found (this version detects python projects only)"
-        raise DetectError(msg)
+        raise DetectError("; ".join([msg, *found.warnings]))
     warnings = list(found.warnings)
     for unit in found.units:
         if not catalog.supported(unit.lang, unit.kind):

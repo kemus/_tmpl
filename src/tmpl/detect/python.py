@@ -1,4 +1,4 @@
-"""Python detection: pyproject.toml units, kinds, and type checkers."""
+"""Python detection: pyproject.toml units, kinds, PEP 723 script dirs, and type checkers."""
 
 from __future__ import annotations
 
@@ -11,9 +11,12 @@ from tmpl.docs import is_map, is_seq
 from tmpl.manifest import Options, Unit
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
 FAST_CHECKERS = ("basedpyright", "pyright", "ty")
+SKIP_DIRS = frozenset({"third_party", "node_modules", "target", "vendor", "vendors", "dist", "build"})
+PEP723 = re.compile(r"^# /// script$", re.MULTILINE)
 
 
 @dataclass
@@ -25,20 +28,62 @@ class Found:
 
 def detect(repo: Path) -> Found:
     found = Found()
-    root = _load(repo / "pyproject.toml")
-    if root is None:
-        return found
-    members = _members(repo, root)
-    paths = (["."] if is_map(root.get("project")) else []) + members
-    checkers: set[str] = set()
-    for path in paths:
+    root = _load(repo / "pyproject.toml") or {}
+    candidates = (["."] if is_map(root.get("project")) else []) + _members(repo, root)
+    checkers = _checkers(root)
+    for path in candidates:
         data = _load(repo / path / "pyproject.toml") or {}
+        checkers |= _checkers(data)
+        if not _is_package(data):
+            found.warnings.append(
+                f"{path}/pyproject.toml is not a package (no [build-system], or tool.uv.package = false); "
+                "not adopted as a unit",
+            )
+            continue
         project = data.get("project")
         scripts = project.get("scripts") if is_map(project) else None
         found.units.append(Unit(path, "python", "cli" if scripts else "lib"))
-        checkers |= _checkers(data)
-    found.lang_options = _type_checkers(checkers | _checkers(root))
+    _add_script_units(repo, found)
+    found.lang_options = _type_checkers(checkers)
     return found
+
+
+def _is_package(data: dict[str, object]) -> bool:
+    """Mirror uv: a project is packaged when tool.uv.package says so, else when it declares a build system."""
+    tool = data.get("tool")
+    uv = tool.get("uv") if is_map(tool) else None
+    package = uv.get("package") if is_map(uv) else None
+    return package if isinstance(package, bool) else "build-system" in data
+
+
+def _add_script_units(repo: Path, found: Found) -> None:
+    """Group PEP 723 scripts by directory; each directory outside a package unit becomes a python/scripts unit."""
+    packages = [u.path for u in found.units]
+    for directory in sorted({f.parent.relative_to(repo).as_posix() for f in _pep723_files(repo)}):
+        if directory in packages:
+            found.warnings.append(f"PEP 723 scripts in {directory}/ share a path with a package unit; not adopted")
+        elif not any(_inside_package(directory, p) for p in packages):
+            found.units.append(Unit(directory, "python", "scripts"))
+
+
+def _inside_package(directory: str, package: str) -> bool:
+    if package == ".":
+        return directory.split("/", maxsplit=1)[0] in {"src", "tests"}
+    return directory.startswith(f"{package}/")
+
+
+def _pep723_files(repo: Path) -> Iterator[Path]:
+    for dirpath, dirnames, filenames in repo.walk():
+        dirnames[:] = [d for d in dirnames if not _skipped(dirpath / d)]
+        for name in filenames:
+            path = dirpath / name
+            if name.endswith(".py") and PEP723.search(path.read_text(errors="replace")):
+                yield path
+
+
+def _skipped(directory: Path) -> bool:
+    """Hidden and dependency dirs, and nested repos (submodules, vendored checkouts)."""
+    return directory.name.startswith(".") or directory.name in SKIP_DIRS or (directory / ".git").exists()
 
 
 def _load(file: Path) -> dict[str, object] | None:
