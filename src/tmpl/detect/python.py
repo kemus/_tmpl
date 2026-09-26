@@ -38,9 +38,11 @@ def detect(repo: Path) -> Found:
         checkers |= _checkers(data)
         if not _is_package(data):
             manifest_file = PurePosixPath(path, "pyproject.toml")
+            # The root stays tmpl's python root either way: dev tools, checker config, and workspace tables.
+            managed = "; tmpl still manages its python root tables" if path == "." else ""
             found.warnings.append(
                 f"{manifest_file} is not a package (no [build-system], or tool.uv.package = false); "
-                "not adopted as a unit",
+                f"not adopted as a unit{managed}",
             )
             continue
         project = data.get("project")

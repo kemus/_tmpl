@@ -81,7 +81,10 @@ def test_detect(name: str, tmp_path: Path) -> None:
 
 def test_non_package_root_is_reported(tmp_path: Path) -> None:
     detected = detect(copy("ai-sessions", tmp_path))
-    assert "pyproject.toml is not a package (no [build-system], or tool.uv.package = false); " in detected.warnings[0]
+    assert detected.warnings[0] == (
+        "pyproject.toml is not a package (no [build-system], or tool.uv.package = false); "
+        "not adopted as a unit; tmpl still manages its python root tables"
+    )
 
 
 def test_serve_is_refused(tmp_path: Path) -> None:

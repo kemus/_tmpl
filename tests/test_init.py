@@ -5,6 +5,7 @@ import pytest
 
 from tmpl import manifest
 from tmpl.cli import UsageError, app
+from tmpl.detect import detect
 
 from .conftest import commit_all, git
 
@@ -96,3 +97,11 @@ def test_init_refuses_non_empty_dir(tmp_path: Path) -> None:
     (tmp_path / "file").write_text("x\n")
     with pytest.raises(UsageError, match="not empty"):
         run("init", str(tmp_path), "--unit", "python:cli", "--no-setup")
+
+
+def test_generated_scripts_root_is_not_reported(tmp_path: Path) -> None:
+    repo = tmp_path / "new-tool"
+    assert run("init", str(repo), "--unit", "python:scripts@scripts", "--no-setup") == 0
+    detected = detect(repo)
+    assert [(u.path, u.kind) for u in detected.manifest.unit] == [("scripts", "scripts")]
+    assert detected.warnings == []
