@@ -65,7 +65,7 @@ order = 41
 when = "{{ type_checker_thorough not in ('none', type_checker_fast) }}"
 data = { name = "{{ type_checker_thorough }}", builtin = "{{ checker_builtin.get(type_checker_thorough, '') }}", glob = "{{ '' if type_checker_thorough in checker_builtin else '**/*.py' }}", check = "{{ checker_cmd.get(type_checker_thorough, '') }}", hooks = ["pre-push", "check"], slow = true }
 
-# With no python package, a non-package root pyproject holds the dev tools and checker config.
+# Unless a package sits at `.`, the root pyproject holds the dev tools and checker config.
 [[fragment]]
 sink = "workspace.python"
 data.root."dependency-groups".dev = ["pytest", "ruff"]

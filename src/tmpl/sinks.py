@@ -226,9 +226,10 @@ def _patched(frags: list[Frag], key: str) -> dict[str, object]:
 def python_workspace(frags: list[Frag], _ctx: dict[str, object]) -> list[SinkFile]:
     """The python root: a uv workspace once a package sits off `.`, or a non-package project with no package at all.
 
-    Units send `{member}`; the language sends `{root}` tables for the non-package project, which gives the venv its
-    dev tools and the checkers their config. Render patches the output into a root package's pyproject, whose
-    `testpaths` gain the `{testpath}` of units outside it (scripts); without that root, pytest finds them itself.
+    Units send `{member}`; the language sends `{root}` tables for any root that is not itself a package,
+    which gives the venv its dev tools and the checkers their config. Render patches the output into a root package's
+    pyproject, whose `testpaths` gain the `{testpath}` of units outside it (scripts); without that root, pytest finds
+    them itself.
     `{tool}` tables land in the root pyproject whatever its shape: pytest and the checkers run from there.
     """
     all_members = {str(f.data["member"]) for f in frags if "member" in f.data}
@@ -239,7 +240,8 @@ def python_workspace(frags: list[Frag], _ctx: dict[str, object]) -> list[SinkFil
         doc.add("tool", {"pytest": {"ini_options": {"testpaths": testpaths}}})
     if members:
         deep_patch(doc, {"tool": {"uv": {"workspace": {"members": members}}}})
-    elif not all_members:
+    # A virtual workspace root needs the tables too: pytest and the checkers run from the root, not the members.
+    if "." not in all_members:
         root = _patched(frags, "root")
         if "dependency-groups" in root:
             groups = _str_map(root["dependency-groups"])

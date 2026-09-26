@@ -95,11 +95,16 @@ def test_a_root_package_tests_scripts_too(tmp_path: Path) -> None:
     assert root["tool"]["pytest"]["ini_options"]["testpaths"] == ["tests", "scripts/tests"]
 
 
-def test_a_workspace_root_stays_virtual(tmp_path: Path) -> None:
+def test_a_workspace_root_stays_virtual_with_strict_checkers(tmp_path: Path) -> None:
     units = [Unit("libs/core", "python", "lib"), Unit("scripts", "python", "scripts")]
     manifest = Manifest(version="0.1.0", unit=units)
     root = tomllib.loads(render(manifest, "demo-tool", tmp_path)["pyproject.toml"].content)
-    assert root == {"tool": {"uv": {"workspace": {"members": ["libs/core"]}}}}
+    assert "project" not in root
+    assert root["tool"]["uv"]["workspace"] == {"members": ["libs/core"]}
+    # pytest and the checkers run from the root, so its config must be as strict as a member's.
+    assert root["tool"]["basedpyright"]["typeCheckingMode"] == "strict"
+    assert root["tool"]["mypy"] == {"strict": True}
+    assert {"basedpyright", "mypy", "pytest", "ruff"} <= set(root["dependency-groups"]["dev"])
 
 
 IMPORTABLE_SHAPES = {
