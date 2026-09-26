@@ -65,7 +65,7 @@ def slug(name: str) -> str:
 def instances(manifest: Manifest, repo_name: str, live_root: Path | None) -> list[Instance]:
     root_given = {k: v for k, v in manifest.root.items() if k != "features"}
     root_values = catalog.resolve(catalog.options_for(["root"], "root"), root_given, live_root).values
-    root_ctx = {"repo_name": repo_name, **root_values}
+    root_ctx = {"repo_name": repo_name, "tmpl_spec": manifest.spec, **root_values}
     out: list[Instance] = []
 
     def add(layer_id: str, placement: str, ctx: dict[str, object]) -> None:

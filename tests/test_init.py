@@ -65,6 +65,46 @@ def test_sync_follows_script_header_changes(units: list[str], tmp_path: Path) ->
         commit_all(repo, "sync")
 
 
+def test_sync_check_reports_drift_without_writing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = tmp_path / "new-tool"
+    assert run("init", str(repo), "--unit", "python:scripts@scripts", "--no-setup") == 0
+    capsys.readouterr()
+    assert run("sync", str(repo), "--check") == 0
+    assert capsys.readouterr().out == ""
+
+    # Uncommitted on purpose: the check runs from hooks against any worktree.
+    script = repo / "scripts/example.py"
+    script.write_text(script.read_text().replace("# dependencies = []", '# dependencies = ["httpx"]'))
+    assert run("sync", str(repo), "--check") == 1
+    out = capsys.readouterr().out
+    assert '+scripts = ["httpx"]' in out
+    assert "  update  pyproject.toml" in out
+    assert git(repo, "status", "--porcelain").splitlines() == [" M scripts/example.py"]
+
+
+def test_sync_check_reports_a_manifest_to_restamp(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = tmp_path / "new-tool"
+    assert run("init", str(repo), "--unit", "python:lib", "--no-setup") == 0
+    path = repo / manifest.MANIFEST_PATH
+    path.write_text(path.read_text().replace('version = "0.1.0"\n', ""))
+    commit_all(repo, "unversioned")
+    capsys.readouterr()
+    assert run("sync", str(repo), "--check") == 1
+    assert "(version unset -> 0.1.0)" in capsys.readouterr().out
+    assert git(repo, "status", "--porcelain") == ""
+
+
+def test_sync_check_hk_step_runs_the_recorded_release(tmp_path: Path) -> None:
+    repo = tmp_path / "on"
+    assert run("init", str(repo), "--unit", "python:lib", "--no-setup") == 0
+    step = 'check = "uvx --from git+https://github.com/kemus/_tmpl@v0.1.0 tmpl sync --check"'
+    assert step in (repo / ".config/hk.pkl").read_text()
+
+    off = tmp_path / "off"
+    assert run("init", str(off), "--unit", "python:lib", "--opt", "sync_check=false", "--no-setup") == 0
+    assert "tmpl_sync" not in (off / ".config/hk.pkl").read_text()
+
+
 def test_init_routes_options_by_scope(tmp_path: Path) -> None:
     repo = tmp_path / "new-tool"
     opts = ["--opt", "indent=4", "--opt", "type_checker_fast=ty", "--opt", "description=Does things"]

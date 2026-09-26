@@ -17,7 +17,6 @@ from tmpl.manifest import Manifest, Unit
 from tmpl.merge import Prefer
 from tmpl.render import RenderedFile, RenderError, Tree, render
 
-DEFAULT_SOURCE = "git+https://github.com/kemus/_tmpl"
 RENDER_INDEX = ".tmpl-render.json"
 
 app = App(name="tmpl", version=__version__, help="Composable, updatable project templates.")
@@ -227,7 +226,7 @@ def adopt(
 
 
 @app.command
-def sync(path: Path = Path(), *, opts: Reconcile | None = None) -> int:
+def sync(path: Path = Path(), *, check: Flag = False, opts: Reconcile | None = None) -> int:
     """Reconcile the repo with its manifest at this tmpl version.
 
     `--prefer` only applies to a versionless manifest from `adopt --plan`.
@@ -236,31 +235,48 @@ def sync(path: Path = Path(), *, opts: Reconcile | None = None) -> int:
     ----------
     path
         Repository to sync.
+    check
+        Write nothing, print the diff, and exit 1 if a sync would change anything (implies --allow-dirty).
     """
     opts = opts or Reconcile()
     repo = path.resolve()
-    _check_repo(repo, allow_dirty=opts.allow_dirty or opts.dry_run)
+    _check_repo(repo, allow_dirty=opts.allow_dirty or opts.dry_run or check)
     current = manifest.load(repo)
     if current is None:
         msg = f"no {manifest.MANIFEST_PATH} in {repo}; use `tmpl adopt`"
         raise UsageError(msg)
-    base = _render_base(current, repo) if current.version else None
+    recorded = current.version
+    base = _render_base(current, repo) if recorded else None
     current.version = __version__
     actions = reconcile.plan(repo, base, render(current, repo.name, repo), opts.prefer)
+    if check:
+        return _check(repo, actions, recorded)
     if not opts.dry_run:
         manifest.dump(repo, current)
     return _finish(repo, actions, dry_run=opts.dry_run)
+
+
+def _check(repo: Path, actions: list[reconcile.Action], recorded: str) -> int:
+    """Report drift: any action but a note, or a manifest a sync would restamp with this version."""
+    drift = [a for a in actions if a.op != "noted"]
+    if not drift and recorded == __version__:
+        return 0
+    sys.stdout.write(reconcile.diff(repo, drift))
+    if drift:
+        _out(reconcile.summary(drift))
+    if recorded != __version__:
+        _out(f"{'update':>8}  {manifest.MANIFEST_PATH}  (version {recorded or 'unset'} -> {__version__})")
+    _err("tmpl: out of sync with the manifest; run `tmpl sync`")
+    return 1
 
 
 def _render_base(recorded: Manifest, repo: Path) -> Tree:
     """Render the manifest with the tmpl release that produced it (§10)."""
     if recorded.version == __version__:
         return render(recorded, repo.name, repo, base=True)
-    source = recorded.source or DEFAULT_SOURCE
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "out"
-        spec = f"{source}@v{recorded.version}"
-        proc.check("uvx", "--from", spec, "tmpl", "render", "--repo", str(repo), "--out", str(out))
+        proc.check("uvx", "--from", recorded.spec, "tmpl", "render", "--repo", str(repo), "--out", str(out))
         index = json.loads((out / RENDER_INDEX).read_text())
         return {path: RenderedFile((out / path).read_text(), **meta) for path, meta in index.items()}
 

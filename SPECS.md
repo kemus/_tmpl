@@ -106,6 +106,7 @@ description = "…"
 license = "MIT"
 indent = "2"
 max_line_length = 120
+sync_check = true                 # hk step running `tmpl sync --check` (§8.7)
 features = ["deps-update", "security-scan"]
 
 [lang.python]                     # lang-scoped options: once per repo per language
@@ -341,6 +342,8 @@ Bumps `version` (default: latest release) and reconciles. It prints new or chang
 ### 8.7 `tmpl sync`
 
 Reconciles the current manifest at the current version, e.g. after a hand edit of `.config/tmpl.toml` or after changing an option with `tmpl set KEY=VALUE`.
+
+`--check` writes nothing. It prints the diff and exits 1 when a sync would change anything, including restamping the manifest's `version`. It accepts a dirty worktree. With the root option `sync_check` (default `true`), the root layer adds an hk step `tmpl_sync` running `uvx --from <source>@v<version> tmpl sync --check`, the release the manifest records. The step is slow: it runs on `pre-push` and in CI. It catches drift that only a sync repairs, such as a PEP 723 header that no longer matches the `scripts` dependency group (§5.3). CI needs read access to `source`.
 
 ### 8.8 Read-only commands
 

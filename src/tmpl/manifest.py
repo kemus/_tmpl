@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from tomlkit.items import Table
 
 MANIFEST_PATH = Path(".config/tmpl.toml")
+DEFAULT_SOURCE = "git+https://github.com/kemus/_tmpl"
 
 type Options = dict[str, object]
 
@@ -38,6 +39,11 @@ class Manifest:
     root: Options = attrs.field(factory=dict[str, object])
     lang: dict[str, Options] = attrs.field(factory=dict[str, Options])
     unit: list[Unit] = attrs.field(factory=list[Unit])
+
+    @property
+    def spec(self) -> str:
+        """The `uvx --from` requirement for the tmpl release that reconciled this manifest."""
+        return f"{self.source or DEFAULT_SOURCE}@v{self.version}"
 
     @property
     def langs(self) -> list[str]:

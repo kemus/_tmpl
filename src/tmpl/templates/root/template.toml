@@ -23,6 +23,13 @@ scope = "root"
 type = "int"
 default = 120
 
+# An hk step fails when `tmpl sync` would change anything, e.g. after a PEP 723 header edit (§5.3).
+# It runs the tmpl release that last reconciled the repo, so CI needs read access to that source.
+[options.sync_check]
+scope = "root"
+type = "bool"
+default = true
+
 [files."third_party/.gitkeep"]
 policy = "seed"
 force_add = true
@@ -50,6 +57,17 @@ data = { name = "trailing_whitespace", builtin = "trailing_whitespace", hooks = 
 sink = "hk.steps"
 order = 2
 data = { name = "newlines", builtin = "newlines", hooks = ["pre-commit", "check", "fix"] }
+
+[[fragment]]
+sink = "hk.steps"
+order = 90
+when = "{{ sync_check }}"
+data = { name = "tmpl_sync", check = "uvx --from {{ tmpl_spec }} tmpl sync --check", hooks = ["pre-push", "check"], slow = true }
+
+[[fragment]]
+sink = "mise.tools"
+when = "{{ sync_check }}"
+data = { uv = "latest" }
 
 [[fragment]]
 sink = "ci.steps"
