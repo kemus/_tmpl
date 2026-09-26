@@ -86,7 +86,12 @@ def test_scripts_alone_get_a_non_package_root(tmp_path: Path) -> None:
         "dev": ["mypy", "pytest", "ruff", "ty", {"include-group": "scripts"}],
         "scripts": ["httpx>=0.27", "rich"],
     }
-    assert root["tool"] == {"mypy": {"strict": True}}
+    # The scaffolded test imports scripts as modules: pytest and the checkers look in the scripts dir.
+    assert root["tool"] == {
+        "mypy": {"strict": True, "mypy_path": ["scripts"]},
+        "ty": {"environment": {"extra-paths": ["scripts"]}},
+        "pytest": {"ini_options": {"testpaths": ["scripts/tests"], "pythonpath": ["scripts"], "strict": True}},
+    }
 
 
 def test_a_workspace_root_stays_virtual(tmp_path: Path) -> None:

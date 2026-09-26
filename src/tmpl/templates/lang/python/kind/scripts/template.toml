@@ -20,3 +20,28 @@ uv run --script {{ unit.path }}/example.py
 [[fragment]]
 sink = "python.scripts"
 data = { dir = "{{ unit.path }}" }
+
+# Tests import scripts as modules; with no package, the root pyproject points pytest and the checkers here.
+[[fragment]]
+sink = "workspace.python"
+data.root.tool.pytest.ini_options = { testpaths = ["{{ unit.path }}/tests"], pythonpath = ["{{ unit.path }}"], strict = true }
+
+[[fragment]]
+sink = "workspace.python"
+when = "{{ 'basedpyright' in (type_checker_fast, type_checker_thorough) }}"
+data.root.tool.basedpyright = { extraPaths = ["{{ unit.path }}"] }
+
+[[fragment]]
+sink = "workspace.python"
+when = "{{ 'pyright' in (type_checker_fast, type_checker_thorough) }}"
+data.root.tool.pyright = { extraPaths = ["{{ unit.path }}"] }
+
+[[fragment]]
+sink = "workspace.python"
+when = "{{ 'mypy' in (type_checker_fast, type_checker_thorough) }}"
+data.root.tool.mypy = { mypy_path = ["{{ unit.path }}"] }
+
+[[fragment]]
+sink = "workspace.python"
+when = "{{ 'ty' in (type_checker_fast, type_checker_thorough) }}"
+data.root.tool.ty.environment = { extra-paths = ["{{ unit.path }}"] }

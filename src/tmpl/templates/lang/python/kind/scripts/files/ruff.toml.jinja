@@ -11,3 +11,6 @@ ignore = [
   "CPY001",  # copyright header — the LICENSE file covers the repo
   "INP001",  # scripts are not a package
 ]
+
+[lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
