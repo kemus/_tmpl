@@ -23,9 +23,6 @@ scope = "root"
 type = "int"
 default = 120
 
-[files.".omni/.gitkeep"]
-policy = "seed"
-
 [files."third_party/.gitkeep"]
 policy = "seed"
 force_add = true

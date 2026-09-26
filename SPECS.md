@@ -243,7 +243,6 @@ Layers never template shared files directly. They declare **fragments** (data) a
 | `.config/hk.pkl` | merge (text) | pinned hk package version |
 | `.github/workflows/ci.yml` | merge | actions pinned to full SHAs |
 | `AGENTS.md` | merge (text) | |
-| `.omni/.gitkeep` | seed | |
 | `third_party/.gitkeep` | seed | the tool stages it with `git add -f`, since `/third_party/` is ignored |
 | `.config/tmpl.toml` | owned by the tool | manifest |
 
@@ -486,7 +485,7 @@ Data values render as Jinja strings; a value that renders to `""` is dropped, wh
 | 2a | Cross-cutting add-ons | a separate **features** concept: release, container, docs, deps-update, coverage, bench, fuzz, community, cli-extras, security-scan (§4.3) |
 | 3 | POSIX sh | kept as its own language, `sh` |
 | 4 | hk extension | no extension point; `hk.pkl` is edited directly and updated by 3-way text merge. (Checked with hk 2.1.0: `.config/hk.local.pkl` is documented as a personal, gitignored override, and a Pkl `import* "hk.d/*.pkl"` pattern works but was not chosen.) |
-| 5 | Agent files | `AGENTS.md` + `.omni/.gitkeep` only; current Claude versions read `AGENTS.md` |
+| 5 | Agent files | `AGENTS.md` only; current Claude versions read `AGENTS.md`. No empty `.omni/` placeholder: a `.gitkeep` there only earns its place once the template ships other `.omni/` content |
 | 6 | Adopt value differences | keep ours + report; `--prefer template` flips it |
 | 7 | Go CLI default | kong (cobra, urfave/cli, stdlib `flag` remain options) |
 | 8 | License | `LICENSE` is part of the root baseline, default MIT |
