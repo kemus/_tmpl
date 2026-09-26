@@ -67,7 +67,7 @@ ours   = working tree
 for each path in base ∪ target: merge(base, ours, target) → write / delete / conflict
 ```
 
-Live-sourced options (§3.2) are read once from `ours` and passed to both renders, so a hand-edited `requires-python` never shows up as template drift.
+Live-sourced options (§3.2) are read once from `ours` and passed to both renders, so a hand-edited `requires-python` never shows up as template drift. Derived data whose source is another file (python script dependencies, §5.3) is the exception: the base reads it from the file it lands in, as the last reconcile wrote it, so a changed source reaches the merge as template drift.
 
 | Command | Desired-state change |
 |---|---|
@@ -223,6 +223,7 @@ Layers never template shared files directly. They declare **fragments** (data) a
 - **Dedup:** identical fragments from several units merge. Conflicting values for the same key (e.g. two `python` versions) are a catalog bug, which is why such options are lang-scoped.
 - **Ordering:** hk steps and CI steps carry an `order` so fast checks run first (shellcheck → fmt → clippy → type check → tests).
 - **Workspaces:** a language's workspace root is generated when that language has ≥ 2 units, or 1 unit not at `.`. For python this is a virtual root `pyproject.toml` with `[tool.uv.workspace]` only (or `[tool.uv.workspace]` deep-merged into the root package if a unit sits at `.`). Members come from `lang/<lang>/unit`, so units with `package = false` (§2.2) are never members; a member's manifest omits `readme` unless the unit sits at `.`. The same pattern applies to cargo (virtual manifest vs `[workspace]` in the root package), `go.work`, and JS workspaces.
+- **Script dependencies:** a python `scripts` unit sends its directory to `python.scripts`. Render collects the `dependencies` of each PEP 723 block there (the file on disk over the scaffold) into the root `pyproject.toml`'s `scripts` dependency group, which `dev` includes (`{include-group = "scripts"}`), so one project venv serves checkers, tests, and editors. Scripts pinning conflicting versions fail `uv lock`. A repo of scripts alone has no root `pyproject.toml` to hold the group yet.
 - **Tasks contract:** every language contributes `lint`, `fmt`, and `test` tasks namespaced by language (`test:python`). The root defines `check` (`hk check --all`, depending on `test:*`) and `fix` (`hk fix --all`). CI runs `mise run check` in one job with `HK_PROFILE=slow`.
 - **Tool resolution:** hk 2.1 builtins run structured argv and reject a shell `prefix`, so steps never wrap commands. Each language puts its tools on `PATH` through mise instead; python contributes `_.python.venv = {path = ".venv", create = true}` to `mise.env`, so ruff and the type checkers resolve from the project venv.
 - **Hooks:** a step lists the hooks it joins. `pre-commit` and `fix` run with `fix = true`; a `slow` step joins `check` only under the `slow` profile (CI), while `pre-push` always runs it.
@@ -373,7 +374,7 @@ The tool also detects existing mise, hk, and CI config and maps it into the reco
 
 - `tmpl` releases are semver git tags (`v0.1.0`, …) on this repo. Templates ship inside the Python package, so a tag pins the tool and its templates together.
 - The old base is rendered by **the old release itself**: `uvx --from git+<source>@v<old> tmpl render <tmp> --repo <repo>`, which writes the tree plus a `.tmpl-render.json` index of each file's policy. Rendering logic changes between versions can't corrupt the base. uv's cache keeps repeated updates cheap and makes them work offline after the first run.
-- `render` is the internal, side-effect-free primitive: manifest in, file tree out. Every other command is built on it, and it is the stable contract between versions.
+- `render` is the internal, side-effect-free primitive: manifest in, file tree out. Every other command is built on it, and it is the stable contract between versions. `tmpl render` produces the base side (§2.3).
 
 ## 11. Implementation
 

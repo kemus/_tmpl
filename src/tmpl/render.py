@@ -11,7 +11,7 @@ import attrs
 import jinja2
 import tomlkit
 
-from tmpl import catalog, sinks
+from tmpl import catalog, pep723, sinks
 from tmpl.convert import structure
 from tmpl.docs import is_map, is_seq
 
@@ -21,6 +21,10 @@ if TYPE_CHECKING:
 
     from tmpl.catalog import Layer, Policy
     from tmpl.manifest import Manifest, Unit
+
+
+# Directories of PEP 723 scripts, collected from `{dir}` fragments; read from the tree, not a sink.
+SCRIPT_DIRS = "python.scripts"
 
 
 class RenderError(Exception):
@@ -135,7 +139,8 @@ def _deep_patch(target: MutableMapping[str, object], patch: Mapping[str, object]
             target[key] = value
 
 
-def render(manifest: Manifest, repo_name: str, live_root: Path | None = None) -> Tree:
+def render(manifest: Manifest, repo_name: str, live_root: Path | None = None, *, base: bool = False) -> Tree:
+    """`base`: render the base side of a 3-way merge, with derived data as the last reconcile wrote it."""
     tree: Tree = {}
     frags: dict[str, list[tuple[int, int, sinks.Frag]]] = {}
     patches: list[tuple[str, dict[str, object]]] = []
@@ -153,6 +158,7 @@ def render(manifest: Manifest, repo_name: str, live_root: Path | None = None) ->
             data = structure(_render_data(env, patch.data, inst.context), dict[str, object])
             patches.append((join(inst.placement, patch.dest), data))
     ordered = {sink: [f for _, _, f in sorted(items, key=lambda t: t[:2])] for sink, items in frags.items()}
+    script_dirs = [str(f.data["dir"]) for f in ordered.pop(SCRIPT_DIRS, [])]
     for path, file in _run_sinks(ordered, root_ctx).items():
         # A sink landing on a rendered TOML file (the workspace table on a root package) patches it.
         if path in tree and path.endswith(".toml"):
@@ -161,6 +167,7 @@ def render(manifest: Manifest, repo_name: str, live_root: Path | None = None) ->
             tree[path] = file
     for path, data in patches:
         _apply_patch(tree, path, data)
+    _add_script_group(tree, script_dirs, live_root, base=base)
     return {path: _tidy(path, f) for path, f in sorted(tree.items())}
 
 
@@ -200,6 +207,47 @@ def _apply_patch(tree: Tree, path: str, data: dict[str, object]) -> None:
     _deep_patch(doc, data)
     old = tree[path]
     tree[path] = RenderedFile(tomlkit.dumps(doc), old.policy, old.scaffold, old.force_add)
+
+
+def _add_script_group(tree: Tree, dirs: list[str], live_root: Path | None, *, base: bool) -> None:
+    """Script dependencies become the root pyproject's `scripts` group, which `dev` includes, so the venv has them.
+
+    The scripts on disk win over rendered scaffold: seeds are never overwritten, so the live header is the truth.
+    The base takes the group from the repo's pyproject instead: headers and group live in different files, so a base
+    read from the headers would equal the target and hide every header change from the merge.
+    """
+    deps = _recorded_script_group(live_root) if base else _script_dependencies(tree, dirs, live_root)
+    # A repo of scripts alone has no root pyproject to hold the group yet.
+    if dirs and deps and "pyproject.toml" in tree:
+        group = {"scripts": sorted(deps), "dev": [{"include-group": "scripts"}]}
+        _apply_patch(tree, "pyproject.toml", {"dependency-groups": group})
+
+
+def _recorded_script_group(live_root: Path | None) -> set[str]:
+    path = live_root / "pyproject.toml" if live_root else None
+    if path is None or not path.exists():
+        return set()
+    groups = tomllib.loads(path.read_text()).get("dependency-groups")
+    deps = groups.get("scripts") if is_map(groups) else None
+    return {str(d) for d in deps} if is_seq(deps) else set()
+
+
+def _script_dependencies(tree: Tree, dirs: list[str], live_root: Path | None) -> set[str]:
+    scripts: dict[str, str] = {}
+    for path, file in tree.items():
+        if (posixpath.dirname(path) or ".") in dirs and path.endswith(".py"):
+            scripts[path] = file.content
+    for directory in dirs:
+        for script in sorted((live_root / directory).glob("*.py")) if live_root else []:
+            scripts[join(directory, script.name)] = script.read_text()
+    deps: set[str] = set()
+    for path, text in sorted(scripts.items()):
+        try:
+            deps.update(pep723.dependencies(text))
+        except ValueError as exc:
+            msg = f"{path}: invalid PEP 723 metadata: {exc}"
+            raise RenderError(msg) from exc
+    return deps
 
 
 def _tidy(path: str, file: RenderedFile) -> RenderedFile:

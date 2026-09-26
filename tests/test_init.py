@@ -6,7 +6,7 @@ import pytest
 from tmpl import manifest
 from tmpl.cli import UsageError, app
 
-from .conftest import git
+from .conftest import commit_all, git
 
 
 def run(*args: str) -> int:
@@ -39,6 +39,27 @@ def test_sync_after_init_is_a_no_op(tmp_path: Path, capsys: pytest.CaptureFixtur
     assert run("sync", str(repo)) == 0
     assert capsys.readouterr().out.strip() == "nothing to do"
     assert git(repo, "status", "--porcelain") == ""
+
+
+def _script_groups(repo: Path) -> dict[str, list[object]] | None:
+    return tomllib.loads((repo / "pyproject.toml").read_text()).get("dependency-groups")
+
+
+def test_sync_follows_script_header_changes(tmp_path: Path) -> None:
+    repo = tmp_path / "new-tool"
+    assert run("init", str(repo), "--unit", "python:cli", "--unit", "python:scripts@scripts", "--no-setup") == 0
+    script = repo / "scripts/example.py"
+
+    for deps, expected in [('["rich>=13"]', ["rich>=13"]), ('["httpx"]', ["httpx"]), ("[]", None)]:
+        text = script.read_text()
+        script.write_text(text.replace(text.split("# dependencies = ")[1].split("\n")[0], deps))
+        commit_all(repo, f"deps {deps}")
+        assert run("sync", str(repo)) == 0
+        groups = _script_groups(repo)
+        assert groups is not None
+        assert groups.get("scripts") == expected
+        assert ({"include-group": "scripts"} in groups["dev"]) == (expected is not None)
+        commit_all(repo, "sync")
 
 
 def test_init_routes_options_by_scope(tmp_path: Path) -> None:

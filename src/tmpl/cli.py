@@ -255,7 +255,7 @@ def sync(path: Path = Path(), *, opts: Reconcile | None = None) -> int:
 def _render_base(recorded: Manifest, repo: Path) -> Tree:
     """Render the manifest with the tmpl release that produced it (§10)."""
     if recorded.version == __version__:
-        return render(recorded, repo.name, repo)
+        return render(recorded, repo.name, repo, base=True)
     source = recorded.source or DEFAULT_SOURCE
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "out"
@@ -267,7 +267,7 @@ def _render_base(recorded: Manifest, repo: Path) -> Tree:
 
 @app.command(name="render")
 def render_cmd(out: Path, *, repo: Path = Path()) -> int:
-    """Render the repo's manifest into OUT, with a policy index. The stable contract between versions.
+    """Render the repo's manifest into OUT, with a policy index: the base for syncs from a later tmpl version.
 
     Parameters
     ----------
@@ -281,7 +281,7 @@ def render_cmd(out: Path, *, repo: Path = Path()) -> int:
     if recorded is None:
         msg = f"no {manifest.MANIFEST_PATH} in {repo}"
         raise UsageError(msg)
-    tree = render(recorded, repo.name, repo)
+    tree = render(recorded, repo.name, repo, base=True)
     index: dict[str, dict[str, object]] = {}
     for path, file in tree.items():
         dest = out / path

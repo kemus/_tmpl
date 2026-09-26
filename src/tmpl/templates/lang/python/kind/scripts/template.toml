@@ -15,3 +15,8 @@ Each file in `{{ unit.path }}/` declares its dependencies inline (PEP 723):
 ```sh
 uv run --script {{ unit.path }}/example.py
 ```""" }
+
+# Their dependencies join the root pyproject's `scripts` group, so checkers and tests see them.
+[[fragment]]
+sink = "python.scripts"
+data = { dir = "{{ unit.path }}" }

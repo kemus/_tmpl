@@ -123,6 +123,9 @@ def test_adopt_workspace_keeps_members_and_skips_scripts(tmp_path: Path) -> None
     assert "project" not in root
     assert set(root["tool"]["uv"]["workspace"]["members"]) >= {"apps/*", "libs/*"}
     assert not (repo / "scripts/pyproject.toml").exists()
+    # The script's PEP 723 dependencies reach the venv through the root dev group.
+    assert root["dependency-groups"]["scripts"] == ["cyclopts>=4.25"]
+    assert {"include-group": "scripts"} in root["dependency-groups"]["dev"]
     tool = tomllib.loads((repo / "apps/tool/pyproject.toml").read_text())
     assert tool["project"]["version"] == "0.3.0"
     assert tool["tool"]["uv"]["sources"] == {"core": {"workspace": True}}
