@@ -86,12 +86,13 @@ def test_scripts_alone_get_a_non_package_root(tmp_path: Path) -> None:
         "dev": ["mypy", "pytest", "ruff", "ty", {"include-group": "scripts"}],
         "scripts": ["httpx>=0.27", "rich"],
     }
-    # The scaffolded test imports scripts as modules: pytest and the checkers look in the scripts dir.
-    assert root["tool"] == {
-        "mypy": {"strict": True, "mypy_path": ["scripts"]},
-        "ty": {"environment": {"extra-paths": ["scripts"]}},
-        "pytest": {"ini_options": {"testpaths": ["scripts/tests"], "pythonpath": ["scripts"], "strict": True}},
-    }
+    assert root["tool"] == {"mypy": {"strict": True}}
+
+
+def test_a_root_package_tests_scripts_too(tmp_path: Path) -> None:
+    manifest = Manifest(version="0.1.0", unit=[Unit(".", "python", "cli"), Unit("scripts", "python", "scripts")])
+    root = tomllib.loads(render(manifest, "demo-tool", tmp_path)["pyproject.toml"].content)
+    assert root["tool"]["pytest"]["ini_options"]["testpaths"] == ["tests", "scripts/tests"]
 
 
 def test_a_workspace_root_stays_virtual(tmp_path: Path) -> None:

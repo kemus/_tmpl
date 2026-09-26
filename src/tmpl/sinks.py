@@ -218,13 +218,17 @@ def python_workspace(frags: list[Frag], _ctx: dict[str, object]) -> list[SinkFil
     """The python root: a uv workspace once a package sits off `.`, or a non-package project with no package at all.
 
     Units send `{member}`; the language sends `{root}` tables for the non-package project, which gives the venv its
-    dev tools and the checkers their config. Render patches the output into a root package's pyproject.
+    dev tools and the checkers their config. Render patches the output into a root package's pyproject, whose
+    `testpaths` gain the `{testpath}` of units outside it (scripts); without that root, pytest finds them itself.
     """
     all_members = {str(f.data["member"]) for f in frags if "member" in f.data}
     members = sorted(all_members - {"."})
     doc = tomlkit.document()
+    testpaths = sorted({str(f.data["testpath"]) for f in frags if "testpath" in f.data})
+    if "." in all_members and testpaths:
+        doc.add("tool", {"pytest": {"ini_options": {"testpaths": testpaths}}})
     if members:
-        doc.add("tool", {"uv": {"workspace": {"members": members}}})
+        deep_patch(doc, {"tool": {"uv": {"workspace": {"members": members}}}})
     elif not all_members:
         root: dict[str, object] = {}
         for frag in frags:

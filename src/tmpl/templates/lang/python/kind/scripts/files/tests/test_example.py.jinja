@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import runpy
+from pathlib import Path
 from typing import TYPE_CHECKING
-
-import example
 
 if TYPE_CHECKING:
     import pytest
 
+# Scripts are not a package: run them by path, as `uv run --script` would.
+SCRIPT = Path(__file__).parent.parent / "example.py"
+
 
 def test_main_says_hello(capsys: pytest.CaptureFixture[str]) -> None:
-    example.main()
+    _ = runpy.run_path(str(SCRIPT), run_name="__main__")
     assert capsys.readouterr().out == "hello\n"
