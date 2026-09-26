@@ -379,7 +379,7 @@ The tool also detects existing mise, hk, and CI config and maps it into the reco
 
 ### 11.1 Stack
 
-Python + cyclopts. Dependencies: jinja2, tomlkit, ruamel.yaml, msgspec (manifest/catalog models); git via subprocess (`git merge-file`, `git init`, `git add -f`). Distributed via `uv tool install` / mise `pipx:`.
+Python + cyclopts. Dependencies: jinja2, tomlkit, ruamel.yaml, attrs + cattrs (manifest/catalog models); git via subprocess (`git merge-file`, `git init`, `git add -f`). Distributed via `uv tool install` / mise `pipx:`.
 
 ### 11.2 Repo layout
 
