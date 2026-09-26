@@ -45,9 +45,11 @@ def _script_groups(repo: Path) -> dict[str, list[object]] | None:
     return tomllib.loads((repo / "pyproject.toml").read_text()).get("dependency-groups")
 
 
-def test_sync_follows_script_header_changes(tmp_path: Path) -> None:
+# With a package, the group joins its pyproject; with scripts alone, the non-package root.
+@pytest.mark.parametrize("units", [["--unit", "python:cli"], []])
+def test_sync_follows_script_header_changes(units: list[str], tmp_path: Path) -> None:
     repo = tmp_path / "new-tool"
-    assert run("init", str(repo), "--unit", "python:cli", "--unit", "python:scripts@scripts", "--no-setup") == 0
+    assert run("init", str(repo), *units, "--unit", "python:scripts@scripts", "--no-setup") == 0
     script = repo / "scripts/example.py"
 
     for deps, expected in [('["rich>=13"]', ["rich>=13"]), ('["httpx"]', ["httpx"]), ("[]", None)]:

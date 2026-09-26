@@ -76,6 +76,26 @@ def test_scripts_without_dependencies_add_no_group(tmp_path: Path) -> None:
     assert "scripts" not in data["dependency-groups"]
 
 
+def test_scripts_alone_get_a_non_package_root(tmp_path: Path) -> None:
+    write(tmp_path, {"scripts/fetch.py": SCRIPT})
+    units = [Unit("scripts", "python", "scripts")]
+    manifest = Manifest(version="0.1.0", unit=units, lang={"python": {"type_checker_fast": "ty"}})
+    root = tomllib.loads(render(manifest, "demo-tool", tmp_path)["pyproject.toml"].content)
+    assert "project" not in root
+    assert root["dependency-groups"] == {
+        "dev": ["mypy", "pytest", "ruff", "ty", {"include-group": "scripts"}],
+        "scripts": ["httpx>=0.27", "rich"],
+    }
+    assert root["tool"] == {"mypy": {"strict": True}}
+
+
+def test_a_workspace_root_stays_virtual(tmp_path: Path) -> None:
+    units = [Unit("libs/core", "python", "lib"), Unit("scripts", "python", "scripts")]
+    manifest = Manifest(version="0.1.0", unit=units)
+    root = tomllib.loads(render(manifest, "demo-tool", tmp_path)["pyproject.toml"].content)
+    assert root == {"tool": {"uv": {"workspace": {"members": ["libs/core"]}}}}
+
+
 def test_invalid_script_metadata_is_a_render_error(tmp_path: Path) -> None:
     write(tmp_path, {"scripts/bad.py": "# /// script\n# dependencies = [1]\n# ///\n"})
     manifest = Manifest(version="0.1.0", unit=[Unit(".", "python", "cli"), Unit("scripts", "python", "scripts")])

@@ -13,7 +13,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 
 from tmpl.convert import structure
-from tmpl.docs import is_map
+from tmpl.docs import deep_patch, is_map
 
 if TYPE_CHECKING:
     from tomlkit.items import InlineTable
@@ -215,13 +215,27 @@ def agents(frags: list[Frag], _ctx: dict[str, object]) -> list[SinkFile]:
 
 
 def python_workspace(frags: list[Frag], _ctx: dict[str, object]) -> list[SinkFile]:
-    """A uv workspace once a python unit sits off `.`; render patches it into a root package's pyproject."""
-    members = sorted({str(f.data["member"]) for f in frags} - {"."})
-    if not members:
-        return []
+    """The python root: a uv workspace once a package sits off `.`, or a non-package project with no package at all.
+
+    Units send `{member}`; the language sends `{root}` tables for the non-package project, which gives the venv its
+    dev tools and the checkers their config. Render patches the output into a root package's pyproject.
+    """
+    all_members = {str(f.data["member"]) for f in frags if "member" in f.data}
+    members = sorted(all_members - {"."})
     doc = tomlkit.document()
-    doc.add("tool", {"uv": {"workspace": {"members": members}}})
-    return [SinkFile("pyproject.toml", tomlkit.dumps(doc))]
+    if members:
+        doc.add("tool", {"uv": {"workspace": {"members": members}}})
+    elif not all_members:
+        root: dict[str, object] = {}
+        for frag in frags:
+            if "root" in frag.data:
+                deep_patch(root, _str_map(frag.data["root"]))
+        if "dependency-groups" in root:
+            groups = _str_map(root["dependency-groups"])
+            root["dependency-groups"] = {name: sorted(_str_list(deps)) for name, deps in groups.items()}
+        for key, value in root.items():
+            doc.add(key, value)
+    return [SinkFile("pyproject.toml", tomlkit.dumps(doc))] if doc else []
 
 
 SINKS: dict[str, Sink] = {

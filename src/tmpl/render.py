@@ -13,10 +13,9 @@ import tomlkit
 
 from tmpl import catalog, pep723, sinks
 from tmpl.convert import structure
-from tmpl.docs import is_map, is_seq
+from tmpl.docs import deep_patch, is_map, is_seq
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, MutableMapping
     from pathlib import Path
 
     from tmpl.catalog import Layer, Policy
@@ -127,18 +126,6 @@ def _render_data(env: jinja2.Environment, value: object, ctx: dict[str, object])
     return value
 
 
-def _deep_patch(target: MutableMapping[str, object], patch: Mapping[str, object]) -> None:
-    """Merge patch into target: tables recurse, arrays gain missing items, scalars are replaced."""
-    for key, value in patch.items():
-        current = target.get(key)
-        if is_map(value) and is_map(current):
-            _deep_patch(current, value)
-        elif is_seq(value) and is_seq(current):
-            current.extend(item for item in list(value) if item not in current)
-        else:
-            target[key] = value
-
-
 def render(manifest: Manifest, repo_name: str, live_root: Path | None = None, *, base: bool = False) -> Tree:
     """`base`: render the base side of a 3-way merge, with derived data as the last reconcile wrote it."""
     tree: Tree = {}
@@ -204,7 +191,7 @@ def _apply_patch(tree: Tree, path: str, data: dict[str, object]) -> None:
         msg = f"patch target {path} is not a rendered TOML file"
         raise RenderError(msg)
     doc = tomlkit.parse(tree[path].content)
-    _deep_patch(doc, data)
+    deep_patch(doc, data)
     old = tree[path]
     tree[path] = RenderedFile(tomlkit.dumps(doc), old.policy, old.scaffold, old.force_add)
 
@@ -217,7 +204,6 @@ def _add_script_group(tree: Tree, dirs: list[str], live_root: Path | None, *, ba
     read from the headers would equal the target and hide every header change from the merge.
     """
     deps = _recorded_script_group(live_root) if base else _script_dependencies(tree, dirs, live_root)
-    # A repo of scripts alone has no root pyproject to hold the group yet.
     if dirs and deps and "pyproject.toml" in tree:
         group = {"scripts": sorted(deps), "dev": [{"include-group": "scripts"}]}
         _apply_patch(tree, "pyproject.toml", {"dependency-groups": group})

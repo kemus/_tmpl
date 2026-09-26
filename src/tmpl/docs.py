@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import MutableMapping, MutableSequence
+from collections.abc import Mapping, MutableMapping, MutableSequence
 from typing import TypeIs
 
 
@@ -23,3 +23,15 @@ def plain(value: object) -> object:
         return [plain(v) for v in value]
     unwrap = getattr(value, "unwrap", None)
     return unwrap() if callable(unwrap) else value
+
+
+def deep_patch(target: MutableMapping[str, object], patch: Mapping[str, object]) -> None:
+    """Merge patch into target: tables recurse, arrays gain missing items, scalars are replaced."""
+    for key, value in patch.items():
+        current = target.get(key)
+        if is_map(value) and is_map(current):
+            deep_patch(current, value)
+        elif is_seq(value) and is_seq(current):
+            current.extend(item for item in list(value) if item not in current)
+        else:
+            target[key] = value
