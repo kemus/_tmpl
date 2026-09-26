@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import re
 import tomllib
-from dataclasses import dataclass, field
 from fnmatch import fnmatch
 from functools import cache
 from pathlib import Path
 from typing import Literal
 
-import msgspec
+import attrs
+
+from tmpl.convert import structure
+from tmpl.docs import is_map
 
 TEMPLATES = Path(__file__).parent / "templates"
 
@@ -19,7 +21,8 @@ type Policy = Literal["merge", "seed"]
 type SetKey = Literal["exact", "requirement"]
 
 
-class OptionSpec(msgspec.Struct, forbid_unknown_fields=True):
+@attrs.frozen
+class OptionSpec:
     scope: Scope
     default: object = None
     choices: list[object] | None = None
@@ -37,7 +40,8 @@ class OptionSpec(msgspec.Struct, forbid_unknown_fields=True):
         return value
 
 
-class FileRule(msgspec.Struct, forbid_unknown_fields=True):
+@attrs.frozen
+class FileRule:
     policy: Policy = "merge"
     # Scaffold source: adopt never creates it in an existing repo.
     scaffold: bool = False
@@ -45,37 +49,41 @@ class FileRule(msgspec.Struct, forbid_unknown_fields=True):
     force_add: bool = False
 
 
-class Fragment(msgspec.Struct, forbid_unknown_fields=True):
+@attrs.frozen
+class Fragment:
     sink: str
     data: dict[str, object]
     order: int = 50
     when: str | None = None
 
 
-class Patch(msgspec.Struct, forbid_unknown_fields=True):
+@attrs.frozen
+class Patch:
     dest: str
     data: dict[str, object]
 
 
-class MergeRule(msgspec.Struct, forbid_unknown_fields=True):
-    set_like: dict[str, SetKey] = msgspec.field(default_factory=dict[str, SetKey])
+@attrs.frozen
+class MergeRule:
+    set_like: dict[str, SetKey] = attrs.field(factory=dict[str, SetKey])
 
 
-class LayerSpec(msgspec.Struct, forbid_unknown_fields=True):
-    options: dict[str, OptionSpec] = msgspec.field(default_factory=dict[str, OptionSpec])
-    vars: dict[str, object] = msgspec.field(default_factory=dict[str, object])
-    files: dict[str, FileRule] = msgspec.field(default_factory=dict[str, FileRule])
-    fragment: list[Fragment] = msgspec.field(default_factory=list[Fragment])
-    patch: list[Patch] = msgspec.field(default_factory=list[Patch])
-    merge: dict[str, MergeRule] = msgspec.field(default_factory=dict[str, MergeRule])
+@attrs.frozen
+class LayerSpec:
+    options: dict[str, OptionSpec] = attrs.field(factory=dict[str, OptionSpec])
+    vars: dict[str, object] = attrs.field(factory=dict[str, object])
+    files: dict[str, FileRule] = attrs.field(factory=dict[str, FileRule])
+    fragment: list[Fragment] = attrs.field(factory=list[Fragment])
+    patch: list[Patch] = attrs.field(factory=list[Patch])
+    merge: dict[str, MergeRule] = attrs.field(factory=dict[str, MergeRule])
     # Commands run by setup (§8.9) through `mise exec --`, once per layer in the repo.
-    setup: list[list[str]] = msgspec.field(default_factory=list[list[str]])
+    setup: list[list[str]] = attrs.field(factory=list[list[str]])
     # On a lang-by-kind layer: false for kinds that are not packages (scripts). They skip the
     # language's unit layer, and with it the manifest file and workspace membership.
     package: bool = True
 
 
-@dataclass(frozen=True)
+@attrs.frozen
 class Layer:
     id: str
     dir: Path
@@ -98,7 +106,7 @@ def layer(layer_id: str) -> Layer | None:
     spec_path = directory / "template.toml"
     if not spec_path.exists():
         return None
-    spec = msgspec.convert(tomllib.loads(spec_path.read_text()), LayerSpec)
+    spec = structure(tomllib.loads(spec_path.read_text()), LayerSpec)
     return Layer(layer_id, directory, spec)
 
 
@@ -131,12 +139,12 @@ def options_for(layer_ids: list[str], scope: Scope) -> dict[str, OptionSpec]:
     return specs
 
 
-@dataclass
+@attrs.define
 class Resolved:
     """Option values for rendering, split into what the manifest stores and what was read live."""
 
-    values: dict[str, object] = field(default_factory=dict[str, object])
-    stored: dict[str, object] = field(default_factory=dict[str, object])
+    values: dict[str, object] = attrs.field(factory=dict[str, object])
+    stored: dict[str, object] = attrs.field(factory=dict[str, object])
 
 
 def resolve(specs: dict[str, OptionSpec], given: dict[str, object], live_root: Path | None) -> Resolved:
@@ -175,7 +183,7 @@ def read_live(spec: OptionSpec, root: Path) -> object | None:
 
 def lookup(data: object, dotted: str) -> object | None:
     for key in dotted.split("."):
-        if not isinstance(data, dict):
+        if not is_map(data):
             return None
-        data = msgspec.convert(data, dict[str, object]).get(key)
+        data = data.get(key)
     return data

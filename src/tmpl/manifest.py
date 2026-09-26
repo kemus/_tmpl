@@ -6,9 +6,11 @@ import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import msgspec
+import attrs
 import tomlkit
 from tomlkit.items import AoT
+
+from tmpl.convert import structure
 
 if TYPE_CHECKING:
     from tomlkit.items import Table
@@ -18,22 +20,24 @@ MANIFEST_PATH = Path(".config/tmpl.toml")
 type Options = dict[str, object]
 
 
-class Unit(msgspec.Struct, forbid_unknown_fields=True):
+@attrs.define
+class Unit:
     path: str
     lang: str
     kind: str
-    features: list[str] = msgspec.field(default_factory=list[str])
-    options: Options = msgspec.field(default_factory=dict[str, object])
+    features: list[str] = attrs.field(factory=list[str])
+    options: Options = attrs.field(factory=dict[str, object])
 
 
-class Manifest(msgspec.Struct, forbid_unknown_fields=True):
+@attrs.define
+class Manifest:
     # Empty until the first reconcile: `adopt --plan` writes a versionless manifest,
     # and the next `sync` reconciles it against an empty base (§8.2).
     version: str = ""
     source: str | None = None
-    root: Options = msgspec.field(default_factory=dict[str, object])
-    lang: dict[str, Options] = msgspec.field(default_factory=dict[str, Options])
-    unit: list[Unit] = msgspec.field(default_factory=list[Unit])
+    root: Options = attrs.field(factory=dict[str, object])
+    lang: dict[str, Options] = attrs.field(factory=dict[str, Options])
+    unit: list[Unit] = attrs.field(factory=list[Unit])
 
     @property
     def langs(self) -> list[str]:
@@ -42,7 +46,7 @@ class Manifest(msgspec.Struct, forbid_unknown_fields=True):
 
 
 def loads(text: str) -> Manifest:
-    return msgspec.convert(tomllib.loads(text), Manifest)
+    return structure(tomllib.loads(text), Manifest)
 
 
 def load(repo: Path) -> Manifest | None:

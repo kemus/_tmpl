@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import re
 import tomllib
-from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
+
+import attrs
 
 from tmpl.docs import is_map, is_seq
 from tmpl.manifest import Options, Unit
@@ -20,11 +21,11 @@ SKIP_DIRS = frozenset({"third_party", "node_modules", "target", "vendor", "vendo
 PEP723 = re.compile(r"^# /// script$", re.MULTILINE)
 
 
-@dataclass
+@attrs.define
 class Found:
-    units: list[Unit] = field(default_factory=list[Unit])
-    lang_options: Options = field(default_factory=dict[str, object])
-    warnings: list[str] = field(default_factory=list[str])
+    units: list[Unit] = attrs.field(factory=list[Unit])
+    lang_options: Options = attrs.field(factory=dict[str, object])
+    warnings: list[str] = attrs.field(factory=list[str])
 
 
 def detect(repo: Path) -> Found:

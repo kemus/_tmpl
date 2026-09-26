@@ -7,16 +7,16 @@ import json
 import re
 import tempfile
 from collections.abc import Callable, Mapping, MutableMapping, MutableSequence, Sequence
-from dataclasses import dataclass, field
 from fnmatch import fnmatch
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Literal
 
-import msgspec
+import attrs
 import tomlkit
 
 from tmpl import catalog, proc
 from tmpl.catalog import MergeRule
+from tmpl.convert import structure
 from tmpl.docs import is_map, is_seq, plain
 from tmpl.sinks import yaml
 
@@ -30,21 +30,21 @@ MISSING = object()
 MAX_CONFLICTS = 127
 
 
-@dataclass
+@attrs.define
 class Merged:
     content: str
     conflict: bool = False
     # Adopt: values where ours differs from the template and was kept (or replaced with --prefer template).
-    notes: list[str] = field(default_factory=list[str])
+    notes: list[str] = attrs.field(factory=list[str])
 
 
-@dataclass
+@attrs.define
 class _State:
     adopt: bool
     prefer: Prefer | None
     rule: MergeRule
-    conflicts: list[str] = field(default_factory=list[str])
-    notes: list[str] = field(default_factory=list[str])
+    conflicts: list[str] = attrs.field(factory=list[str])
+    notes: list[str] = attrs.field(factory=list[str])
 
 
 def merge(path: str, base: str | None, ours: str, theirs: str, *, prefer: Prefer | None = None) -> Merged:
@@ -284,7 +284,7 @@ def _merge_ini(base: str | None, ours: str, theirs: str, state: _State) -> Merge
     if state.conflicts:
         raise _StructuredConflictError
     lines = ours.splitlines()
-    for section, values in msgspec.convert(result, dict[str, dict[str, str]]).items():
+    for section, values in structure(result, dict[str, dict[str, str]]).items():
         _apply_ini_section(lines, section, values, ours_parsed.get(section))
     for section in ours_parsed:
         if section and section not in result:

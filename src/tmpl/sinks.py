@@ -5,14 +5,14 @@ from __future__ import annotations
 import io
 import json
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
 from typing import IO, TYPE_CHECKING, Protocol
 
-import msgspec
+import attrs
 import tomlkit
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 
+from tmpl.convert import structure
 from tmpl.docs import is_map
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ HK_HOOKS = ("pre-commit", "pre-push", "fix", "check")
 FIXING_HOOKS = ("pre-commit", "fix")
 
 
-@dataclass(frozen=True)
+@attrs.frozen
 class Frag:
     """A rendered fragment: data plus where its layer was placed."""
 
@@ -34,7 +34,7 @@ class Frag:
     placement: str
 
 
-@dataclass(frozen=True)
+@attrs.frozen
 class SinkFile:
     path: str
     content: str
@@ -69,11 +69,11 @@ def yaml() -> YamlIO:
 
 
 def _str_map(value: object) -> dict[str, object]:
-    return msgspec.convert(value, dict[str, object])
+    return structure(value, dict[str, object])
 
 
 def _str_list(value: object) -> list[str]:
-    return msgspec.convert(value, list[str])
+    return structure(value, list[str])
 
 
 def _merged(frags: list[Frag]) -> dict[str, object]:

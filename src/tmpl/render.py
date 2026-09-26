@@ -5,14 +5,14 @@ from __future__ import annotations
 import posixpath
 import re
 import tomllib
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import attrs
 import jinja2
-import msgspec
 import tomlkit
 
 from tmpl import catalog, sinks
+from tmpl.convert import structure
 from tmpl.docs import is_map, is_seq
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ class RenderError(Exception):
     pass
 
 
-@dataclass(frozen=True)
+@attrs.frozen
 class RenderedFile:
     content: str
     policy: Policy = "merge"
@@ -38,7 +38,7 @@ class RenderedFile:
 type Tree = dict[str, RenderedFile]
 
 
-@dataclass(frozen=True)
+@attrs.frozen
 class Instance:
     """A layer applied at a placement with its rendering context."""
 
@@ -111,15 +111,15 @@ def _env(layer: Layer) -> jinja2.Environment:
 def _render_data(env: jinja2.Environment, value: object, ctx: dict[str, object]) -> object:
     if isinstance(value, str):
         return env.from_string(value).render(ctx)
-    if isinstance(value, dict):
+    if is_map(value):
         out: dict[str, object] = {}
-        for key, item in msgspec.convert(value, dict[str, object]).items():
+        for key, item in value.items():
             rendered = _render_data(env, item, ctx)
             if rendered != "":
                 out[env.from_string(key).render(ctx)] = rendered
         return out
-    if isinstance(value, list):
-        return [_render_data(env, item, ctx) for item in msgspec.convert(value, list[object])]
+    if is_seq(value):
+        return [_render_data(env, item, ctx) for item in value]
     return value
 
 
@@ -147,10 +147,10 @@ def render(manifest: Manifest, repo_name: str, live_root: Path | None = None) ->
         tree.update(_render_files(inst, env))
         for frag in inst.layer.spec.fragment:
             if frag.when is None or env.from_string(frag.when).render(inst.context) == "True":
-                data = msgspec.convert(_render_data(env, frag.data, inst.context), dict[str, object])
+                data = structure(_render_data(env, frag.data, inst.context), dict[str, object])
                 frags.setdefault(frag.sink, []).append((frag.order, index, sinks.Frag(data, inst.placement)))
         for patch in inst.layer.spec.patch:
-            data = msgspec.convert(_render_data(env, patch.data, inst.context), dict[str, object])
+            data = structure(_render_data(env, patch.data, inst.context), dict[str, object])
             patches.append((join(inst.placement, patch.dest), data))
     ordered = {sink: [f for _, _, f in sorted(items, key=lambda t: t[:2])] for sink, items in frags.items()}
     for path, file in _run_sinks(ordered, root_ctx).items():

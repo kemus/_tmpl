@@ -4,13 +4,14 @@ import json
 import re
 import sys
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
+import attrs
+import cattrs
 from cyclopts import App, Parameter
 
-from tmpl import __version__, catalog, git, manifest, proc, reconcile, setup
+from tmpl import __version__, catalog, convert, git, manifest, proc, reconcile, setup
 from tmpl.detect import DetectError, detect
 from tmpl.manifest import Manifest, Unit
 from tmpl.merge import Prefer
@@ -48,7 +49,7 @@ type Flag = Annotated[bool, Parameter(negative=())]
 
 
 @Parameter(name="*")
-@dataclass
+@attrs.define
 class Reconcile:
     """Options shared by commands that reconcile the repo.
 
@@ -304,5 +305,8 @@ def main() -> None:
         ValueError,
     ) as exc:
         _err(f"tmpl: {exc}")
+        code = 2
+    except cattrs.BaseValidationError as exc:
+        _err(f"tmpl: {convert.error_text(exc)}")
         code = 2
     sys.exit(code if isinstance(code, int) else 0)

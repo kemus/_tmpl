@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import difflib
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
+
+import attrs
 
 from tmpl import git
 from tmpl.merge import Prefer, merge
@@ -18,13 +19,13 @@ if TYPE_CHECKING:
 type Op = Literal["create", "update", "delete", "conflict", "kept", "noted"]
 
 
-@dataclass
+@attrs.define
 class Action:
     path: str
     op: Op
     content: str | None = None
     force_add: bool = False
-    notes: list[str] = field(default_factory=list[str])
+    notes: list[str] = attrs.field(factory=list[str])
 
     @property
     def failed(self) -> bool:

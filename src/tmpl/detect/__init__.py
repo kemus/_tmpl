@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+
+import attrs
 
 from tmpl import catalog, git
 from tmpl.detect import python
@@ -28,10 +29,10 @@ FOREIGN_CONFIG = (
 )
 
 
-@dataclass
+@attrs.define
 class Detected:
     manifest: Manifest
-    warnings: list[str] = field(default_factory=list[str])
+    warnings: list[str] = attrs.field(factory=list[str])
 
 
 class DetectError(Exception):
