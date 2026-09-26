@@ -214,12 +214,22 @@ def agents(frags: list[Frag], _ctx: dict[str, object]) -> list[SinkFile]:
     return [SinkFile("AGENTS.md", "# AGENTS.md\n" + _sections(frags))]
 
 
+def _patched(frags: list[Frag], key: str) -> dict[str, object]:
+    """The `key` tables of all fragments, deep-patched together in order."""
+    out: dict[str, object] = {}
+    for frag in frags:
+        if key in frag.data:
+            deep_patch(out, _str_map(frag.data[key]))
+    return out
+
+
 def python_workspace(frags: list[Frag], _ctx: dict[str, object]) -> list[SinkFile]:
     """The python root: a uv workspace once a package sits off `.`, or a non-package project with no package at all.
 
     Units send `{member}`; the language sends `{root}` tables for the non-package project, which gives the venv its
     dev tools and the checkers their config. Render patches the output into a root package's pyproject, whose
     `testpaths` gain the `{testpath}` of units outside it (scripts); without that root, pytest finds them itself.
+    `{tool}` tables land in the root pyproject whatever its shape: pytest and the checkers run from there.
     """
     all_members = {str(f.data["member"]) for f in frags if "member" in f.data}
     members = sorted(all_members - {"."})
@@ -230,15 +240,14 @@ def python_workspace(frags: list[Frag], _ctx: dict[str, object]) -> list[SinkFil
     if members:
         deep_patch(doc, {"tool": {"uv": {"workspace": {"members": members}}}})
     elif not all_members:
-        root: dict[str, object] = {}
-        for frag in frags:
-            if "root" in frag.data:
-                deep_patch(root, _str_map(frag.data["root"]))
+        root = _patched(frags, "root")
         if "dependency-groups" in root:
             groups = _str_map(root["dependency-groups"])
             root["dependency-groups"] = {name: sorted(_str_list(deps)) for name, deps in groups.items()}
         for key, value in root.items():
             doc.add(key, value)
+    if tool := _patched(frags, "tool"):
+        deep_patch(doc, {"tool": tool})
     return [SinkFile("pyproject.toml", tomlkit.dumps(doc))] if doc else []
 
 

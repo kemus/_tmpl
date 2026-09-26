@@ -2,6 +2,13 @@
 
 package = false
 
+# Tests may import scripts as modules (`import example`): pytest and the checkers search this directory.
+# Off by default, since every script then shadows any module of the same name, and importing runs its top level.
+[options.importable]
+scope = "unit"
+type = "bool"
+default = false
+
 [files."*.py"]
 policy = "seed"
 scaffold = true
@@ -25,3 +32,28 @@ data = { dir = "{{ unit.path }}" }
 [[fragment]]
 sink = "workspace.python"
 data = { testpath = "{{ unit.path }}/tests" }
+
+[[fragment]]
+sink = "workspace.python"
+when = "{{ importable }}"
+data.tool.pytest.ini_options = { pythonpath = ["{{ unit.path }}"] }
+
+[[fragment]]
+sink = "workspace.python"
+when = "{{ importable and 'basedpyright' in (type_checker_fast, type_checker_thorough) }}"
+data.tool.basedpyright = { extraPaths = ["{{ unit.path }}"] }
+
+[[fragment]]
+sink = "workspace.python"
+when = "{{ importable and 'pyright' in (type_checker_fast, type_checker_thorough) }}"
+data.tool.pyright = { extraPaths = ["{{ unit.path }}"] }
+
+[[fragment]]
+sink = "workspace.python"
+when = "{{ importable and 'mypy' in (type_checker_fast, type_checker_thorough) }}"
+data.tool.mypy = { mypy_path = ["{{ unit.path }}"] }
+
+[[fragment]]
+sink = "workspace.python"
+when = "{{ importable and 'ty' in (type_checker_fast, type_checker_thorough) }}"
+data.tool.ty.environment = { extra-paths = ["{{ unit.path }}"] }

@@ -77,6 +77,21 @@ def test_init_routes_options_by_scope(tmp_path: Path) -> None:
     assert "indent_size = 4" in (repo / ".editorconfig").read_text()
 
 
+def test_init_stores_bool_options_as_booleans(tmp_path: Path) -> None:
+    repo = tmp_path / "new-tool"
+    unit = ["--unit", "python:scripts@scripts", "--opt", "importable=true"]
+    assert run("init", str(repo), *unit, "--no-setup") == 0
+    recorded = manifest.load(repo)
+    assert recorded is not None
+    assert recorded.unit[0].options["importable"] is True
+
+
+def test_init_rejects_a_non_boolean_bool_option(tmp_path: Path) -> None:
+    unit = ["--unit", "python:scripts@scripts", "--opt", "importable=yes"]
+    with pytest.raises(ValueError, match="expected true or false"):
+        run("init", str(tmp_path / "new-tool"), *unit, "--no-setup")
+
+
 @pytest.mark.parametrize(
     ("args", "error"),
     [

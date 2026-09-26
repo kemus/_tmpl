@@ -102,6 +102,31 @@ def test_a_workspace_root_stays_virtual(tmp_path: Path) -> None:
     assert root == {"tool": {"uv": {"workspace": {"members": ["libs/core"]}}}}
 
 
+IMPORTABLE_SHAPES = {
+    "workspace": [Unit("libs/core", "python", "lib")],
+    "root package": [Unit(".", "python", "cli")],
+    "scripts alone": [],
+}
+
+
+@pytest.mark.parametrize("shape", list(IMPORTABLE_SHAPES))
+def test_importable_scripts_reach_the_root_pyproject(shape: str, tmp_path: Path) -> None:
+    scripts = Unit("scripts", "python", "scripts", options={"importable": True})
+    manifest = Manifest(version="0.1.0", unit=[*IMPORTABLE_SHAPES[shape], scripts])
+    tool = tomllib.loads(render(manifest, "demo-tool", tmp_path)["pyproject.toml"].content)["tool"]
+    assert tool["pytest"]["ini_options"]["pythonpath"] == ["scripts"]
+    assert tool["basedpyright"]["extraPaths"] == ["scripts"]
+    assert tool["mypy"]["mypy_path"] == ["scripts"]
+
+
+def test_scripts_are_not_importable_by_default(tmp_path: Path) -> None:
+    manifest = Manifest(version="0.1.0", unit=[Unit(".", "python", "cli"), Unit("scripts", "python", "scripts")])
+    tool = tomllib.loads(render(manifest, "demo-tool", tmp_path)["pyproject.toml"].content)["tool"]
+    assert "pythonpath" not in tool["pytest"]["ini_options"]
+    assert "extraPaths" not in tool["basedpyright"]
+    assert "mypy_path" not in tool["mypy"]
+
+
 def test_invalid_script_metadata_is_a_render_error(tmp_path: Path) -> None:
     write(tmp_path, {"scripts/bad.py": "# /// script\n# dependencies = [1]\n# ///\n"})
     manifest = Manifest(version="0.1.0", unit=[Unit(".", "python", "cli"), Unit("scripts", "python", "scripts")])

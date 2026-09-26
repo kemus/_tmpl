@@ -26,7 +26,7 @@ class OptionSpec:
     scope: Scope
     default: object = None
     choices: list[object] | None = None
-    type: Literal["str", "int"] = "str"
+    type: Literal["str", "int", "bool"] = "str"
     # Live source: "<file relative to the scope's path>:<dotted key>"; never stored (§3.2).
     source: str | None = None
     source_pattern: str | None = None
@@ -34,6 +34,13 @@ class OptionSpec:
     def coerce(self, name: str, value: object) -> object:
         if self.type == "int":
             value = int(str(value))
+        elif self.type == "bool" and not isinstance(value, bool):
+            # `--opt` values arrive as text; the manifest stores TOML booleans.
+            text = str(value).lower()
+            if text not in {"true", "false"}:
+                msg = f"option {name}={value!r}: expected true or false"
+                raise ValueError(msg)
+            value = text == "true"
         if self.choices is not None and value not in self.choices:
             msg = f"option {name}={value!r}: expected one of {self.choices}"
             raise ValueError(msg)
