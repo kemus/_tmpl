@@ -1,0 +1,162 @@
+amends "package://github.com/jdx/hk/releases/download/v2.0.1/hk@2.0.1#/Config.pkl"
+
+import "package://github.com/jdx/hk/releases/download/v2.0.1/hk@2.0.1#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.0.1/hk@2.0.1#/Config.pkl"
+
+min_hk_version = "2.0.1"
+exclude = List("third_party", "data", "web/data.js")
+// mypy waits for the slow or ci profile, so a run without them always skips it.
+hide_warnings = List("missing-profiles")
+
+local ruffCheck: Config.Step = (Builtins.ruff) {
+  types = null
+  glob = List("scripts/**/*.py", "tests/**/*.py", ".config/ruff.toml")
+  check = "ruff check --no-cache --config .config/ruff.toml scripts tests"
+  fix = "ruff check --no-cache --config .config/ruff.toml --fix scripts tests"
+  tests = new {}
+}
+
+local ruffFormat: Config.Step = (Builtins.ruff_format) {
+  types = null
+  glob = ruffCheck.glob
+  check_diff = null
+  check = "ruff format --no-cache --config .config/ruff.toml --check scripts tests"
+  fix = "ruff format --no-cache --config .config/ruff.toml scripts tests"
+  tests = new {}
+}
+
+local rumdl: Config.Step = (Builtins.rumdl) { tests = new {} }
+local miseFormat: Config.Step = (Builtins.mise) { tests = new {} }
+local pklFormat: Config.Step = (Builtins.pkl_format) { tests = new {} }
+
+// The lock files are generated, and tombi's own config limits it to these files too.
+local tombiLint: Config.Step = (Builtins.tombi) {
+  glob = List("pyproject.toml", ".config/**/*.toml")
+  check = "tombi lint --quiet --error-on-warnings {{files}}"
+  tests = new {}
+}
+
+// `.config/tombi.toml` leaves the formatting of the mise config to `mise fmt`.
+local tombiFormat: Config.Step = (Builtins.tombi_format) {
+  glob = tombiLint.glob
+  tests = new {}
+}
+
+// hk validate is a Pkl configuration check; it has no dedicated builtin.
+local hkValidate: Config.Step = (Builtins.pkl) {
+  types = null
+  check = "hk validate"
+  tests = new {}
+}
+
+// hk has no pytest builtin. The whole suite runs whenever anything it reads changes.
+local pytest: Config.Step = new {
+  glob =
+    List(
+      "scripts/**/*.py",
+      "tests/**",
+      ".config/pytest.toml",
+      "pyproject.toml",
+      "uv.lock",
+    )
+  check = "uv run pytest -c .config/pytest.toml --rootdir=. --quiet"
+}
+
+// Both type checkers read the whole project, through their own config files.
+// Lists are joined with `+`: hk 2.0.1 rejects `List.add`, and its error names another variable.
+local typedFiles: List<String> =
+  List(
+    "scripts/**/*.py",
+    "tests/**/*.py",
+    "pyproject.toml",
+    "uv.lock",
+  )
+
+// hk has no basedpyright builtin. It is the quick checker, so the slow profile drops it.
+local basedpyright: Config.Step = new {
+  glob = typedFiles + List(".config/pyrightconfig.json")
+  profiles = List("!slow")
+  check = "uv run basedpyright --project .config/pyrightconfig.json"
+}
+
+// The slow checker: it runs under the slow profile, and under the ci one.
+local mypy: Config.Step = (Builtins.mypy) {
+  glob = typedFiles + List(".config/mypy.ini")
+  profiles = List("slow")
+  check = "uv run mypy --config-file .config/mypy.ini"
+  tests = new {}
+}
+
+// A step's profiles must all be enabled, so "slow or ci" takes a second step.
+local mypyCi: Config.Step = (mypy) { profiles = List("ci", "!slow") }
+
+local lint: Config.Group = new {
+  steps {
+    ["ruff-check"] = ruffCheck
+    ["tombi-lint"] = tombiLint
+    ["rumdl"] = rumdl
+  }
+}
+local format: Config.Group = new {
+  steps {
+    ["ruff-format"] = ruffFormat
+    ["tombi-format"] = tombiFormat
+    ["mise-fmt"] = miseFormat
+    ["pkl-format"] = pklFormat
+  }
+}
+local validate: Config.Group = new {
+  steps { ["hk-validate"] = hkValidate }
+}
+local test: Config.Group = new {
+  steps { ["pytest"] = pytest }
+}
+local types: Config.Group = new {
+  steps {
+    ["basedpyright"] = basedpyright
+    ["mypy"] = mypy
+    ["mypy-ci"] = mypyCi
+  }
+}
+
+// A hook cannot turn a profile on, and git runs pre-push without one. So the
+// pre-push hook is given the types that the slow profile selects: mypy alone.
+local slowTypes: Config.Group = new {
+  steps { ["mypy"] = (mypy) { profiles = null } }
+}
+
+local pipeline: Mapping<String, Config.Step | Config.Group> = new {
+  ["validate"] = validate
+  ["format"] = format
+  ["lint"] = lint
+  ["types"] = types
+}
+local checked: Config.Hook = new {
+  fix = false
+  stage = false
+  steps = pipeline
+}
+local tested: Config.Hook = (checked) {
+  steps {
+    ["test"] = test
+  }
+}
+local pushed: Config.Hook = (tested) {
+  steps {
+    ["types"] = slowTypes
+  }
+}
+
+hooks {
+  ["check"] = checked
+  ["fix"] = (checked) { fix = true }
+  ["pre-commit"] = tested
+  ["pre-push"] = pushed
+
+  // One hook per kind of tool: `hk run lint`, or `hk run format --fix`.
+  ["validate"] = new { steps { ["validate"] = validate } }
+  ["format"] = new { steps { ["format"] = format } }
+  ["lint"] = new { steps { ["lint"] = lint } }
+  ["types"] = new { steps { ["types"] = types } }
+  ["test"] = new { steps { ["test"] = test } }
+}

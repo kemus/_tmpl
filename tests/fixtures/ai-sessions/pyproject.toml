@@ -1,0 +1,21 @@
+[project]
+  name = "sessions"
+  version = "0.1.0"
+  description = "Analysis of my coding-agent sessions"
+  readme = "README.md"
+  requires-python = ">=3.14"
+  dependencies = [
+    "cyclopts>=4.25.2",
+    "rich>=15.0.0",
+  ]
+
+[dependency-groups]
+  dev = [
+    "basedpyright>=1.40.1",
+    "mypy>=2.3.1",
+    "pytest>=9",
+  ]
+
+[tool.uv]
+  # Scripts, not an installable package.
+  package = false

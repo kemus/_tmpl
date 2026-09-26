@@ -1,0 +1,13 @@
+[tools]
+"aqua:rvben/rumdl" = "0.2.73"
+hk = "2.0.1"
+pkl = "0.32.1"
+python = "3.14.7"
+ruff = "0.16.8"
+tombi = "1.5.5"
+uv = "0.12.17"
+
+# Tasks are files: .config/mise/tasks/<task>/_default
+
+[settings]
+lockfile = true

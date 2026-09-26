@@ -1,0 +1,267 @@
+[project]
+authors = [{ name = "kemus" }]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Utilities",
+]
+dependencies = [
+  "aiohttp>=3.13.3",
+  "click>=8.3.1",
+  "defusedxml>=0.7.1",
+  "html-to-markdown>=2.26.3",
+  "lxml>=6.0.2",
+  "pydantic>=2.12.5",
+  "readability-lxml>=0.8.4.1",
+  "rich>=14.3.2",
+  "structlog>=25.5.0",
+  "typer>=0.23.1",
+]
+description = "Scrape websites with llms.txt files."
+keywords = ["llms.txt", "scraper"]
+license = "MIT"
+name = "llmstxt-scraper"
+readme = "README.md"
+requires-python = ">=3.14"
+version = "0.18.0"
+
+[project.urls]
+Homepage = "https://github.com/kemus/llmstxt-scraper"
+Issues = "https://github.com/kemus/llmstxt-scraper/issues"
+Repository = "https://github.com/kemus/llmstxt-scraper"
+
+[project.scripts]
+llmstxt-scraper = "llmstxt_scraper.cli:app"
+
+[dependency-groups]
+dev = [
+  "add-trailing-comma>=4.0.0",
+  "basedpyright>=1.38.0",
+  "complexipy>=5.2.0",
+  "diff-cover>=10.2.0",
+  "interrogate>=1.7",
+  "mypy>=1.19.1",
+  "pip-audit>=2.10.0",
+  "pydistcheck>=0.11.3",
+  "pydocstringformatter>=0.7.5",
+  "pylint>=4.0.4",
+  "pyroma>=5.0.1",
+  "pytest>=9.0.2",
+  "pytest-asyncio>=1.3.0",
+  "pytest-cov>=7.0.0",
+  "removestar>=1.5.2",
+  "ruff>=0.15.1",
+  "ssort>=0.16.0",
+  "ty>=0.0.17",
+  "types-lxml>=2026.2.16",
+  "vulture>=2.14",
+  "xenon>=0.9.3",
+]
+
+[build-system]
+build-backend = "uv_build"
+requires = ["uv_build>=0.7.1,<0.8"]
+
+[tool.uv]
+# Build this project's editable install despite a user-level `no-build = true`.
+# Every locked dependency ships wheels, so this does not build third-party sdists.
+no-build = false
+
+[tool.uv.build-backend]
+source-exclude = ["/src/llmstxt_scraper/plugins/output"]
+wheel-exclude = ["llmstxt_scraper/plugins/output"]
+
+# =============================================================================
+# pytest — Python testing framework
+# Reference: https://docs.pytest.org/en/stable/reference/customize.html
+# =============================================================================
+[tool.pytest.ini_options]
+# Cache directory for pytest
+# Type: str | Default: ".pytest_cache"
+cache_dir = ".cache/pytest"
+# Directories to search for tests
+# Type: list[str] | Default: ["."]
+testpaths = ["tests"]
+# Glob pattern for test file discovery
+# Type: list[str] | Default: ["test_*.py", "*_test.py"]
+python_files = ["test_*.py"]
+# Pattern for test class discovery (classes matching this are collected)
+# Type: list[str] | Default: ["Test*"]
+python_classes = ["Test*"]
+# Pattern for test function/method discovery
+# Type: list[str] | Default: ["test_*"]
+python_functions = ["test_*"]
+# Extra command-line arguments always passed to pytest
+# Type: str | Default: ""
+addopts = "-v --tb=short"
+# Python warning filters (suppress noisy deprecation warnings from dependencies)
+# Type: list[str] | Default: []
+filterwarnings = ["ignore::DeprecationWarning"]
+
+# =============================================================================
+# diff-cover — coverage reporting for changed lines only
+# Reference: https://github.com/Bachmann1234/diff_cover
+# CLI flags moved here from hk.pkl for centralized config
+# =============================================================================
+[tool.coverage.html]
+directory = ".cache/htmlcov"
+
+[tool.diff_cover]
+# Branch to compare against for diff (determines which lines are "new")
+# Type: str | Default: "origin/main"
+compare_branch = "origin/main"
+# Minimum coverage percentage for changed lines (exit non-zero if below)
+# Type: float (0-100) | Default: not set (always passes)
+fail_under = 80
+
+# =============================================================================
+# interrogate — Python docstring coverage checker
+# Reference: https://interrogate.readthedocs.io/
+# =============================================================================
+[tool.interrogate]
+# Ignore __init__.py module-level docstrings
+# Type: bool | Default: false
+ignore-init-module = true
+# Ignore nested class docstrings
+# Type: bool | Default: false
+ignore-nested-classes = false
+# Ignore magic/dunder method docstrings (__str__, __repr__, etc.)
+# Type: bool | Default: false
+ignore-magic = false
+# Ignore semiprivate methods/functions starting with single underscore
+# Type: bool | Default: false
+ignore-semiprivate = false
+# Ignore private methods/functions starting with double underscore
+# Type: bool | Default: false
+ignore-private = false
+# Ignore methods with @property setter/deleter decorators
+# Type: bool | Default: false
+ignore-property-decorators = false
+# Ignore module-level docstrings
+# Type: bool | Default: false
+# ignore-module = false
+# Ignore methods with @overload decorator
+# Type: bool | Default: false
+ignore-overloaded-functions = false
+# Minimum docstring coverage percentage to pass
+# Type: float (0-100) | Default: 80.0
+fail-under = 95
+# Directories/files to exclude from checking
+# Type: list[str] | Default: []
+exclude = []
+# Verbosity level (0=quiet, 1=summary, 2=detailed)
+# Type: int (0-2) | Default: 0
+verbose = 1
+# Suppress all output except failures
+# Type: bool | Default: false
+quiet = false
+# Enable colored output
+# Type: bool | Default: true
+color = true
+# Docstring convention ("google" treats class+__init__ as one unit)
+# Type: str ("google" | "numpy" | "pep257" | "sphinx") | Default: not set
+style = "google"
+# Regex patterns for names to always consider covered
+# Type: list[str] | Default: []
+# whitelist-regex = []
+# Hide files that meet the fail-under threshold from output
+# Type: bool | Default: false
+# omit-covered-files = false
+# Regex patterns for names to exclude from checking
+# Type: list[str] | Default: []
+# ignore-regex = []
+
+# =============================================================================
+# pydistcheck — Python distribution (wheel/sdist) validation
+# Reference: https://github.com/jameslamb/pydistcheck
+# =============================================================================
+[tool.pydistcheck]
+# Maximum compressed archive size
+# Type: str (e.g. "5M", "500K") | Default: "50M"
+max_allowed_size_compressed = "5M"
+# Maximum uncompressed archive size
+# Type: str (e.g. "25M", "5G") | Default: "75M"
+max_allowed_size_uncompressed = "25M"
+# Maximum path length for any file in the distribution
+# Type: int | Default: 200
+max_path_length = 200
+# Maximum number of files allowed in the distribution
+# Type: int | Default: 2000
+max_allowed_files = 500
+# Checks to run ("all" or list of specific check names)
+# Type: str | list[str] | Default: "all"
+inspect = "all"
+
+# =============================================================================
+# pydocstringformatter — Python docstring formatter
+# Reference: https://github.com/DanielNoord/pydocstringformatter
+# =============================================================================
+[tool.pydocstringformatter]
+# Write changes back to files (vs dry-run)
+# Type: bool | Default: false
+write = true
+# Strip trailing whitespace from docstrings
+# Type: bool | Default: false
+strip-whitespaces = true
+# Ensure blank line between summary and body
+# Type: bool | Default: false
+split-summary-body = true
+# Maximum number of lines for the summary sentence
+# Type: int | Default: 1
+max-summary-lines = 1
+# Require opening quotes on same line as first summary word
+# Type: bool | Default: true
+# beginning-quotes-same-line = true
+# Force closing quotes on a new line for multi-line docstrings
+# Type: bool | Default: false
+# closing-quotes-on-newline = false
+# Force one-line format when docstring fits on a single line
+# Type: bool | Default: false
+# force-one-line-docstring = false
+# Require blank line before summary (after opening quotes)
+# Type: bool | Default: false
+# pre-summary-newline = false
+# Length of section header underlines for numpydoc style
+# Type: int | Default: same as section header
+# numpydoc-section-hyphen-length = 0
+
+# =============================================================================
+# pylint — Python static code analyzer (used only for typecheck rules)
+# Reference: https://pylint.readthedocs.io/en/latest/user_guide/configuration/
+# =============================================================================
+[tool.pylint.main]
+# Message categories to enable (only type-inference rules not covered by ruff)
+# Type: list[str] | Default: all categories enabled
+enable = ["typecheck"]
+# Message categories to disable (everything else; ruff covers it)
+# Type: list[str] | Default: none
+disable = ["all"]
+
+# =============================================================================
+# vulture — find unused Python code (dead code detection)
+# Reference: https://github.com/jendrikseipp/vulture
+# =============================================================================
+[tool.vulture]
+# Directories to scan for dead code
+# Type: list[str] | Default: ["."]
+paths = ["src"]
+# Minimum confidence percentage for reporting unused code (0-100)
+# Type: int | Default: 60
+min_confidence = 80
+# Names to exclude from unused code detection
+# Type: list[str] | Default: []
+ignore_names = ["model_config"] # Pydantic uses this implicitly
+# Directories/files to exclude from dead code detection
+# Type: list[str] | Default: []
+exclude = ["src/llmstxt_scraper/plugins.py"] # Protocol params are false positives
+# Decorators to ignore (functions/methods with these decorators are not flagged)
+# Type: list[str] | Default: []
+# ignore_decorators = ["@app.route", "@celery.task"]
+# Sort results by size (number of lines) instead of file path
+# Type: bool | Default: false
+# sort_by_size = false

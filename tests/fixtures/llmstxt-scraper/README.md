@@ -1,0 +1,3 @@
+# llmstxt-scraper
+
+Trimmed fixture.

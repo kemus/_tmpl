@@ -1,0 +1,3 @@
+# kupdate
+
+Trimmed fixture.

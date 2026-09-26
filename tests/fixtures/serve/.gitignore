@@ -1,0 +1,39 @@
+# Build Output
+_site/
+dist/
+out/
+
+# Cache
+.cache
+.eslintcache
+.jekyll-cache
+.jekyll-metadata
+.lycheecache
+.sass-cache
+*.tsbuildinfo
+
+# CICD
+*.lcov
+.vale/
+
+# Containers
+volumes/
+
+# Dependencies
+node_modules/
+.venv/
+
+# Environment Files
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Logs
+logs/
+_.log
+
+# OS-level
+.DS_Store

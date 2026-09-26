@@ -1,0 +1,362 @@
+amends "package://github.com/jdx/hk/releases/download/v1.50.0/hk@1.50.0#/Config.pkl"
+
+import "package://github.com/jdx/hk/releases/download/v1.50.0/hk@1.50.0#/Builtins.pkl"
+
+// ---------------------------------------------------------------------------
+// Steps grouped by filetype. All steps run in a single parallel Group.
+// hk handles read/write locking per-file, so no need for serial ordering.
+// ---------------------------------------------------------------------------
+
+local excluded =
+  List(
+    ".git/**",
+    ".mise/mise.lock",
+    ".vale/**",
+    ".lycheecache",
+    ".cache/**",
+    ".complexipy_cache/**",
+    ".venv/**",
+    "vendors/**",
+  )
+
+// -- Configs --
+local configs = new Mapping<String, Step> {
+  ["yamllint"] = (Builtins.yamllint) {
+    prefix = "mise exec -- "
+    check = "yamllint --config-file .config/yamllint.yaml --strict {{ files }}"
+  }
+  ["taplo"] = (Builtins.taplo) {
+    prefix = "mise exec -- "
+    check = "taplo lint --config .config/taplo.toml {{ files }}"
+  }
+  ["taplo_format"] = (Builtins.taplo_format) {
+    prefix = "mise exec -- "
+    check = "taplo format --config .config/taplo.toml --check {{ files }}"
+    check_diff = "taplo format --config .config/taplo.toml --diff {{ files }}"
+    fix = "taplo format --config .config/taplo.toml {{ files }}"
+  }
+}
+
+// -- Pkl --
+local pklSteps = new Mapping<String, Step> {
+  ["pkl"] = (Builtins.pkl) { prefix = "mise exec -- " }
+  ["pkl_format"] = (Builtins.pkl_format) { prefix = "mise exec -- " }
+}
+
+// -- Shell --
+local shell = new Mapping<String, Step> {
+  ["shellcheck"] = (Builtins.shellcheck) {
+    prefix = "mise exec -- "
+    check = "shellcheck --rcfile='.config/shellcheckrc' {{ files }}"
+  }
+  ["shfmt"] = (Builtins.shfmt) { prefix = "mise exec -- " }
+}
+
+local zsh = new Mapping<String, Step> {
+  ["zsh"] = new Step {
+    glob = List(".zshrc", ".zprofile", ".zshenv", ".config/zsh/functions/**")
+    check = "zsh -n {{files}}"
+  }
+}
+
+// -- Python --
+local python = new Mapping<String, Step> {
+  ["python_check_ast"] = (Builtins.python_check_ast) { prefix = "mise exec -- " }
+  ["ruff"] = (Builtins.ruff) {
+    prefix = "mise exec -- uv run"
+    check = "ruff check --config '.config/ruff.toml' --force-exclude {{ files }}"
+    check_diff = "ruff check --config '.config/ruff.toml' --force-exclude --diff {{ files }}"
+    fix = "ruff check --config '.config/ruff.toml' --force-exclude --fix {{ files }}"
+  }
+  ["ssort"] {
+    prefix = "mise exec -- uv run"
+    glob = List("**/*.py", "**/*.pyi")
+    check = "ssort --check {{ files }}"
+    fix = "ssort {{ files }}"
+  }
+  ["ruff_format"] = (Builtins.ruff_format) {
+    prefix = "mise exec -- uv run"
+    check = "ruff format --config '.config/ruff.toml' --quiet --force-exclude --check {{ files }}"
+    check_diff =
+      "ruff format --config '.config/ruff.toml' --quiet --force-exclude --diff {{ files }}"
+    fix = "ruff format --config '.config/ruff.toml' --quiet --force-exclude {{ files }}"
+    depends = List("ssort")
+  }
+
+  ["pydocstringformatter"] {
+    prefix = "mise exec -- uv run"
+    glob = List("**/*.py", "**/*.pyi")
+    check = "pydocstringformatter --quiet --exit-code {{ files }}"
+    fix = "pydocstringformatter --quiet --write {{ files }}"
+    depends = List("ruff_format")
+  }
+
+  ["ty"] {
+    prefix = "mise exec -- uv run"
+    glob = List("**/*.py", "**/*.pyi")
+    check = "ty check --config-file .config/ty.toml {{ files }}"
+    tests {
+      ["check bad file"] {
+        files = List("{{tmp}}/test.py")
+        write { ["{{tmp}}/test.py"] = "x: int = ''" }
+        expect { code = 1 }
+      }
+      ["check good file"] {
+        files = List("{{tmp}}/test.py")
+        write { ["{{tmp}}/test.py"] = "x: str = ''" }
+        expect { code = 0 }
+      }
+    }
+  }
+
+  ["vulture"] {
+    prefix = "mise exec -- uv run"
+    glob = List("src/**/*.py", "src/**/*.pyi")
+    check = "vulture {{ files }}"
+  }
+
+  ["pip_audit"] {
+    prefix = "mise exec -- uv run"
+    glob = List("pyproject.toml")
+    // PYSEC-2022-42969: disputed ReDoS in py library (only affects subversion, not reproducible)
+    check = "pip-audit --progress-spinner=off --skip-editable --ignore-vuln PYSEC-2022-42969"
+  }
+
+  // disabled: ryl claims to not be ready for use yet.
+  // ["ryl"] = (Builtins.ryl) { prefix = "mise exec -- " }
+  ["add_trailing_comma"] {
+    prefix = "mise exec -- uv run"
+    glob = List("**/*.py", "**/*.pyi")
+    check = "add-trailing-comma {{ files }}"
+    fix = "add-trailing-comma --exit-zero-even-if-changed {{ files }}"
+    depends = List("ruff_format")
+  }
+
+  ["removestar"] {
+    prefix = "mise exec -- uv run"
+    glob = List("src/**/*.py")
+    check = "removestar {{ files }}"
+    fix = "removestar -i {{ files }}"
+  }
+
+  ["complexipy"] {
+    prefix = "mise exec -- uv run"
+    glob = List("src/**/*.py")
+    check = "complexipy -q -mx 50 {{ files }}" //  CLI functions with error handlers are complex
+  }
+
+  ["xenon"] {
+    prefix = "mise exec -- uv run"
+    glob = List("src/**/*.py")
+    // CLI functions have high cyclomatic complexity due to error handling
+    check = "xenon --max-absolute D --max-modules C --max-average B {{ files }}"
+  }
+
+  ["interrogate"] {
+    prefix = "mise exec -- uv run"
+    glob = List("src/**/*.py")
+    check = "interrogate --quiet {{ files }}"
+  }
+
+  ["pylint_typecheck"] {
+    prefix = "mise exec -- uv run"
+    glob = List("src/**/*.py")
+    check = "pylint --rcfile=pyproject.toml --score=no {{ files }}"
+    depends = List("basedpyright")
+  }
+
+  ["pyroma"] {
+    prefix = "mise exec -- uv run"
+    glob = List("pyproject.toml")
+    check = "pyroma --quiet --min 8 ."
+  }
+
+  ["pydistcheck"] {
+    prefix = "mise exec -- uv run"
+    glob = List("dist/**/*.whl", "dist/**/*.tar.gz")
+    check = "pydistcheck dist/*"
+  }
+
+  ["diff_cover"] {
+    prefix = "mise exec -- uv run"
+    glob = List("coverage.xml") // Only runs if coverage.xml exists (after pytest --cov)
+    check = "diff-cover coverage.xml"
+  }
+}
+
+local mypy = (Builtins.mypy) {
+  prefix = "mise exec -- uv run"
+  check = "mypy --config-file .config/mypy.ini --cache-dir .cache/mypy {{ files }}"
+}
+
+local basedpyright = new Step {
+  prefix = "mise exec -- uv run"
+  glob = List("**/*.py", "**/*.pyi")
+  check = "basedpyright {{ files }}"
+}
+
+// -- Dockerfile --
+local dockerfile = new Mapping<String, Step> {
+  ["hadolint"] = (Builtins.hadolint) { prefix = "mise exec -- " }
+
+  ["compose-validate"] {
+    prefix = "mise exec -- "
+    glob = "**/compose.yml"
+    check = "docker compose config --quiet"
+  }
+}
+
+// -- GitHub Actions --
+local actions = new Mapping<String, Step> {
+  ["actionlint"] = (Builtins.actionlint) { prefix = "mise exec -- " }
+  ["ghalint_action"] = (Builtins.ghalint_action) { prefix = "mise exec -- " }
+  ["ghalint_workflow"] = (Builtins.ghalint_workflow) { prefix = "mise exec -- " }
+  ["pinact"] = (Builtins.pinact) { prefix = "mise exec -- " }
+  ["zizmor"] = (Builtins.zizmor) { prefix = "mise exec -- " }
+}
+
+// -- Prose --
+local prose = new Mapping<String, Step> {
+  ["vale"] = (Builtins.vale) {
+    prefix = "mise exec -- "
+    check = "vale sync --config='.config/vale.ini' && vale --config='.config/vale.ini' {{ files }}"
+  }
+  ["lychee"] = (Builtins.lychee) {
+    prefix = "mise exec -- "
+    glob = "**/*.md"
+    check = "lychee --config .config/lychee.toml --no-progress --quiet {{ files }}"
+  }
+  ["typos"] {
+    prefix = "mise exec -- "
+    glob = "**/*"
+    check = "typos --config .config/typos.toml {{ files }}"
+    fix = "typos --config .config/typos.toml --write-changes {{ files }}"
+  }
+  ["rumdl"] = (Builtins.rumdl) {
+    prefix = "mise exec -- "
+    exclude = List(".agents/**")
+    check_diff = "rumdl check --config .config/rumdl.toml --diff {{ files }}"
+    fix = "rumdl check --config .config/rumdl.toml --fix {{ files }}"
+  }
+}
+
+// -- Formatting --
+local formatting = new Mapping<String, Step> {
+  ["prettier"] = (Builtins.prettier) {
+    prefix = "mise exec -- "
+    glob =
+      List(
+        // JavaScript
+        "**/*.js",
+        "**/*.jsx",
+        "**/*.mjs",
+        "**/*.cjs",
+        // TypeScript
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.mts",
+        "**/*.cts",
+        // CSS
+        "**/*.css",
+        "**/*.scss",
+        "**/*.less",
+        // HTML
+        "**/*.html",
+        "**/*.htmlangular",
+        // JSON
+        "**/*.json",
+        "**/*.json5",
+        "**/*.jsonc",
+        // GraphQL
+        "**/*.graphql",
+        "**/*.gql",
+        // Markdown
+        "**/*.md",
+        "**/*.mdx",
+        "**/*.markdown",
+        // YAML
+        "**/*.yaml",
+        "**/*.yml",
+        // Handlebars
+        "**/*.handlebars",
+        "**/*.hbs",
+        // Frameworks
+        "**/*.vue",
+        "**/*.svelte",
+        "**/*.astro",
+      )
+    check = "prettier --config .config/prettierrc.yaml --log-level warn --check {{ files }}"
+    check_list_files =
+      "prettier --config .config/prettierrc.yaml --log-level warn --list-different {{ files }}"
+    fix = "prettier --config .config/prettierrc.yaml --log-level warn --write {{ files }}"
+  }
+}
+
+// -- General --
+local general = new Mapping<String, Step> {
+  ["editorconfig-checker"] = (Builtins.editorconfig_checker) { prefix = "mise exec -- " }
+  ["mise"] = (Builtins.mise) { prefix = "mise exec -- " }
+}
+
+// -- File hygiene --
+local hygiene = new Mapping<String, Step> {
+  ["byte_order_marker"] = (Builtins.byte_order_marker) { prefix = "mise exec -- " }
+  ["check_added_large_files"] = (Builtins.check_added_large_files) { prefix = "mise exec -- " }
+  // TODO: re-enable after hk fix — v1.34.0 false-positives (compares file with itself)
+  // ["check_case_conflict"] = Builtins.check_case_conflict
+  ["check_executables_have_shebangs"] = (Builtins.check_executables_have_shebangs) {
+    prefix = "mise exec -- "
+  }
+  ["check_merge_conflict"] = (Builtins.check_merge_conflict) { prefix = "mise exec -- " }
+  ["check_symlinks"] = (Builtins.check_symlinks) { prefix = "mise exec -- " }
+  ["detect_private_key"] = (Builtins.detect_private_key) { prefix = "mise exec -- " }
+  ["fix_smart_quotes"] = (Builtins.fix_smart_quotes) { prefix = "mise exec -- " }
+  ["gitleaks"] {
+    prefix = "mise exec -- "
+    glob = "**/*"
+    check = "gitleaks detect -c .config/gitleaks.toml --source . --log-level warn"
+  }
+  ["mixed_line_ending"] = (Builtins.mixed_line_ending) { prefix = "mise exec -- " }
+  ["newlines"] = (Builtins.newlines) { prefix = "mise exec -- " }
+  // ["no_commit_to_branch"] = (Builtins.no_commit_to_branch) { prefix = "mise exec -- " }
+  ["trailing_whitespace"] = (Builtins.trailing_whitespace) { prefix = "mise exec -- " }
+}
+
+// -- All steps in one parallel group --
+local all = new Group {
+  steps {
+    ...configs
+    ...pklSteps
+    ...shell
+    ...python
+    ["mypy"] = mypy
+    ["basedpyright"] = basedpyright
+    ...dockerfile
+    ...actions
+    ...prose
+    ...formatting
+    ...general
+    ...hygiene
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Hooks
+// ---------------------------------------------------------------------------
+
+exclude = excluded
+
+hooks {
+  ["pre-commit"] {
+    fix = true
+    stash = "git"
+    steps { ["all"] = all }
+  }
+  ["fix"] {
+    fix = true
+    steps { ["all"] = all }
+  }
+  ["check"] {
+    steps { ["all"] = all }
+  }
+}

@@ -1,0 +1,131 @@
+---
+# Workflow name. Default: path relative to repository root.
+name: CI
+
+# The conditions that must be met for the workflow to run.
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+  push:
+    branches:
+      - main
+      - master
+
+# Name of workflow runs generated from the workflow. Default: event-specific workflow run info.
+# e.g., if triggered by a push: commit message; if triggered by a pull_request: PR title.
+# This value can include expressions and can reference the github and inputs contexts.
+run-name: ${{ github.event_name }} - ${{ github.ref_name }}
+
+jobs:
+  lint:
+    name: Lint and Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    container:
+      image: archlinux:base-devel
+
+    steps:
+      - name: Install base dependencies
+        run: |
+          pacman -Syu --noconfirm \
+            git \
+            python \
+            python-pyalpm
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Install mise
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
+        with:
+          install: true
+
+      - name: Install mise tools
+        run: mise install --locked
+
+      - name: Sync Python dependencies
+        run: mise exec -- uv sync
+
+      - name: Run linting checks
+        run: mise exec -- hk run check
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    container:
+      image: archlinux:base-devel
+
+    steps:
+      - name: Install base dependencies
+        run: |
+          pacman -Syu --noconfirm \
+            git \
+            python \
+            python-pyalpm
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Install mise
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
+        with:
+          install: true
+
+      - name: Install mise tools
+        run: mise install --locked
+
+      - name: Sync Python dependencies
+        run: mise exec -- uv sync
+
+      - name: Run tests
+        run: mise exec -- uv run pytest
+
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    container:
+      image: archlinux:base-devel
+
+    steps:
+      - name: Install base dependencies
+        run: |
+          pacman -Syu --noconfirm \
+            git \
+            python \
+            python-pyalpm
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Install mise
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
+        with:
+          install: true
+
+      - name: Install mise tools
+        run: mise install --locked
+
+      - name: Sync Python dependencies
+        run: mise exec -- uv sync
+
+      - name: Build wheel
+        run: mise exec -- uv build
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wheel
+          path: dist/*.whl

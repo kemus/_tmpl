@@ -1,0 +1,19 @@
+target-version = "py314"
+include = ["scripts/**/*.py", "tests/**/*.py"]
+
+[lint]
+  select = ["ALL"]
+  # COM812: the formatter owns trailing commas, and ruff warns that the rule can fight it.
+  # CPY001: no project copyright policy has been defined.
+  ignore = ["COM812", "CPY001"]
+
+  [lint.isort]
+    # The tests import the updater as a module (`pythonpath` in pytest.toml).
+    known-first-party = ["update"]
+
+  [lint.per-file-ignores]
+    # pytest tests are written with bare asserts.
+    "tests/**" = ["S101"]
+
+  [lint.pydocstyle]
+    convention = "google"

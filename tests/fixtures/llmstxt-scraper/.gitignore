@@ -1,0 +1,11 @@
+.agents/settings.local.json
+.cache/
+!.cache/.gitkeep
+output/
+!output/.gitkeep
+.complexipy_cache/
+.lycheecache
+**/__pycache__/
+.coverage
+.venv/
+.claude.bak/

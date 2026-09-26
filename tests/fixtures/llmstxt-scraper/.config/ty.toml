@@ -1,0 +1,21 @@
+# =============================================================================
+# ty — fast Python type checker by Astral (ruff/uv creators)
+# Reference: https://docs.astral.sh/ty/reference/configuration/
+# =============================================================================
+[environment]
+# Additional module resolution paths for type stubs
+# Type: list[str] | Default: []
+extra-paths = ["typings"]
+
+[terminal]
+# Exit with non-zero code if any warnings are reported
+# Type: bool | Default: false
+error-on-warning = false
+# Output format for diagnostics
+# Type: str ("full" | "concise") | Default: "full"
+output-format = "full"
+
+[src]
+# Files/directories to include in type checking
+# Type: list[str] | Default: project root
+include = ["src", "tests"]

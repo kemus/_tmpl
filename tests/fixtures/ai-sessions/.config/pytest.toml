@@ -1,0 +1,8 @@
+[pytest]
+  minversion = "9.0"
+  testpaths = ["tests"]
+  # The updater is a script, imported by the tests as a module. Relative to this file.
+  pythonpath = ["../scripts"]
+  addopts = ["-ra", "--strict-markers", "--strict-config"]
+  xfail_strict = true
+  filterwarnings = ["error"]

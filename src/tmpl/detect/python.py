@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import tomllib
 from dataclasses import dataclass, field
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
 from tmpl.docs import is_map, is_seq
@@ -35,8 +36,9 @@ def detect(repo: Path) -> Found:
         data = _load(repo / path / "pyproject.toml") or {}
         checkers |= _checkers(data)
         if not _is_package(data):
+            manifest_file = PurePosixPath(path, "pyproject.toml")
             found.warnings.append(
-                f"{path}/pyproject.toml is not a package (no [build-system], or tool.uv.package = false); "
+                f"{manifest_file} is not a package (no [build-system], or tool.uv.package = false); "
                 "not adopted as a unit",
             )
             continue

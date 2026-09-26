@@ -1,0 +1,52 @@
+# EditorConfig
+# Reference: https://editorconfig.org/
+
+# Stop searching for .editorconfig in parent directories
+# Valid values: true, false
+# Required for root config
+root = true
+
+# Default settings for all files
+[*]
+# Character encoding
+# Valid values: utf-8, utf-8-bom, utf-16be, utf-16le, latin1
+# Default: none (editor default)
+charset = utf-8
+
+# Line ending style
+# Valid values: lf, crlf, cr
+# Default: none (editor default)
+end_of_line = lf
+
+# Ensure file ends with a newline
+# Valid values: true, false
+# Default: none (editor default)
+insert_final_newline = true
+
+# Remove trailing whitespace on save
+# Valid values: true, false
+# Default: none (editor default)
+trim_trailing_whitespace = true
+
+# Maximum line length hint for editors
+# Valid values: positive integer, off
+# Default: none
+max_line_length = 120
+
+# Indentation style
+# Valid values: space, tab
+# Default: none (editor default)
+indent_style = space
+
+# Indentation size in columns
+# Valid values: positive integer, tab
+# Default: none (editor default)
+indent_size = 2
+
+# Makefiles require tabs
+[Makefile]
+indent_style = tab
+
+# Markdown -- preserve trailing whitespace (line breaks)
+[*.md]
+trim_trailing_whitespace = false

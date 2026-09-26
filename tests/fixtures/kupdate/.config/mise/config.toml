@@ -1,0 +1,10 @@
+[tools]
+"aqua:jdx/hk" = "2.0.1"
+pkl = "0.32.1"
+python = "3.14.7"
+rumdl = "0.2.73"
+tombi = "1.5.5"
+"aqua:astral-sh/uv" = "0.12.15"
+
+[env]
+UV_PYTHON_DOWNLOADS = "never"

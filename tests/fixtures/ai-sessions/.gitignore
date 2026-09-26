@@ -1,0 +1,6 @@
+/third_party/
+/data/
+/web/data.js
+/.venv/
+__pycache__/
+.pytest_cache/

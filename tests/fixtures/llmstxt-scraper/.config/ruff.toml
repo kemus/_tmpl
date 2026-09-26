@@ -1,0 +1,56 @@
+#:schema https://www.schemastore.org/ruff.json
+
+# =============================================================================
+# ruff — extremely fast Python linter and formatter
+# Reference: https://docs.astral.sh/ruff/settings/
+# =============================================================================
+# Minimum Python version to target for linting and formatting
+# Type: str ("py37" .. "py314") | Default: "py39"
+target-version = "py314"
+# Maximum line length for linting and formatting
+# Type: int | Default: 88
+line-length = 88
+# Enable preview/unstable rules and formatting features
+# Type: bool | Default: false
+preview = true
+# Directories to treat as first-party for import sorting (isort)
+# Type: list[str] | Default: ["."]
+cache-dir = ".cache/ruff"
+src = ["src"]
+
+[lint]
+# Rule codes/prefixes to enable; "ALL" enables every available rule
+# Type: list[str] | Default: ["E4", "E7", "E9", "F"]
+select = ["ALL"]
+# Regex pattern for allowed "dummy" variable names (unused variables)
+# Type: str | Default: "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+# Tag names to recognize as TODO/FIXME-style comments (for TD/FIX rules)
+# Type: list[str] | Default: ["TODO", "FIXME", "XXX"]
+task-tags = ["TODO", "FIXME", "XXX", "HACK"]
+
+# Docstring convention for pydocstyle (D) rules
+[lint.pydocstyle]
+# Type: str ("google" | "numpy" | "pep257") | Default: not set
+convention = "google"
+
+# Ruff formatter settings (used by `ruff format`)
+[format]
+# Quote style for strings
+# Type: str ("double" | "single" | "preserve") | Default: "double"
+quote-style = "double"
+# Indentation style
+# Type: str ("space" | "tab") | Default: "space"
+indent-style = "space"
+# Whether to respect magic trailing commas (prevents collapsing to single line)
+# Type: bool | Default: false
+skip-magic-trailing-comma = false
+# Line ending style
+# Type: str ("auto" | "lf" | "cr-lf" | "native") | Default: "auto"
+line-ending = "auto"
+# Auto-format code examples in docstrings (Markdown, reST, doctests)
+# Type: bool | Default: false
+docstring-code-format = true
+# Line length for code examples in docstrings ("dynamic" uses the global line-length)
+# Type: int | "dynamic" | Default: "dynamic"
+docstring-code-line-length = "dynamic"

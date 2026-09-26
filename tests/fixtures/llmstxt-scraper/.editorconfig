@@ -1,0 +1,70 @@
+# EditorConfig
+# Reference: https://github.com/editorconfig/editorconfig/wiki/EditorConfig-Properties
+
+# Stop searching for .editorconfig in parent directories
+# Valid values: true, false
+# Required for root config
+root = true
+
+# Default settings for all files
+[*]
+# Character encoding
+# Type: Literal("utf-8", "utf-8-bom", "utf-16be", "utf-16le", "latin1")
+charset = utf-8
+
+# Line ending style
+# Type: Literal("lf", "crlf", "cr")
+end_of_line = lf
+
+# Ensure file ends with a newline
+# Type: bool
+insert_final_newline = true
+
+# Remove trailing whitespace on save
+# Type: bool
+trim_trailing_whitespace = true
+
+# Maximum line length hint for editors
+# Type: int | Literal("off")
+max_line_length = 120
+
+# Indentation style
+# Type: Literal("space", "tab")
+indent_style = space
+
+# Indentation size in columns
+# Type: int | Literal("tab")
+indent_size = 2
+
+# Makefiles require tabs
+[Makefile]
+indent_style = tab
+
+# Markdown -- preserve trailing whitespace (line breaks)
+[*.md]
+trim_trailing_whitespace = false
+
+# PKGBUILD uses tabs per Arch conventions
+[PKGBUILD]
+indent_style = tab
+
+# .SRCINFO uses tabs per Arch conventions
+[.SRCINFO]
+indent_style = tab
+
+# Lock files have machine-generated long lines
+[*.lock]
+max_line_length = off
+
+# Plan files are ephemeral working docs
+[.agents/plans/**]
+max_line_length = off
+indent_size = unset
+
+# git generates .gitmodules with tab indentation
+[.gitmodules]
+indent_style = tab
+
+# pyrightconfig.json contains long $schema URLs
+[pyrightconfig.json]
+max_line_length = off

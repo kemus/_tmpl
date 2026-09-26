@@ -1,0 +1,153 @@
+amends "package://github.com/jdx/hk/releases/download/v1.34.0/hk@1.34.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.34.0/hk@1.34.0#/Builtins.pkl"
+
+// ---------------------------------------------------------------------------
+// Steps grouped by filetype. All steps run in a single parallel Group.
+// hk handles read/write locking per-file, so no need for serial ordering.
+// ---------------------------------------------------------------------------
+
+local excluded = List(".git/**", ".mise/mise.lock")
+
+// -- YAML --
+local yaml = new Mapping<String, Step> {
+  ["yamllint"] = (Builtins.yamllint) {
+    check = "yamllint -c .config/yamllint.yaml {{ files }}"
+  }
+  ["yamlfmt"] = (Builtins.yamlfmt) {
+    check_diff = "yamlfmt -conf .config/yamlfmt -lint {{ files }}"
+    fix = "yamlfmt -conf .config/yamlfmt {{ files }}"
+  }
+  ["yq"] = Builtins.yq
+}
+
+// -- JSON --
+local json = new Mapping<String, Step> {
+  ["jq"] = Builtins.jq
+}
+
+// -- TOML --
+local toml = new Mapping<String, Step> {
+  ["tombi"] = Builtins.tombi
+  ["tombi_format"] = Builtins.tombi_format
+}
+
+// -- Shell --
+local shell = new Mapping<String, Step> {
+  ["shellcheck"] = (Builtins.shellcheck) {
+    check = "shellcheck --rcfile=.config/shellcheckrc {{ files }}"
+  }
+  ["shfmt"] = Builtins.shfmt
+}
+
+// -- Pkl --
+local pklSteps = new Mapping<String, Step> {
+  ["pkl"] = Builtins.pkl
+  ["pkl_format"] = Builtins.pkl_format
+}
+
+// -- Dockerfile --
+local dockerfile = new Mapping<String, Step> {
+  ["hadolint"] = (Builtins.hadolint) {
+    check = "hadolint -c .config/hadolint.yaml {{ files }}"
+  }
+}
+
+// -- GitHub Actions --
+local actions = new Mapping<String, Step> {
+  ["actionlint"] = Builtins.actionlint
+  ["ghalint_action"] = Builtins.ghalint_action
+  ["ghalint_workflow"] = Builtins.ghalint_workflow
+  ["pinact"] = Builtins.pinact
+  ["zizmor"] = Builtins.zizmor
+}
+
+// -- Prose --
+local prose = new Mapping<String, Step> {
+  ["vale"] = (Builtins.vale) {
+    check = "vale --config .config/vale.ini sync && vale --config .config/vale.ini {{ files }}"
+  }
+  ["lychee"] = (Builtins.lychee) {
+    check = "lychee -c .config/lychee.toml --no-progress {{ files }}"
+  }
+  ["typos"] = (Builtins.typos) {
+    check_diff =
+      #"""
+      output=$(typos -c .config/typos.toml --diff {{files}})
+      [ -z "$output" ] && exit 0
+      printf "%s" "$output"
+      exit 1
+      """#
+    fix = "typos -c .config/typos.toml --write-changes {{ files }}"
+  }
+}
+
+// -- Config --
+local config = new Mapping<String, Step> {
+  ["editorconfig-checker"] = (Builtins.editorconfig_checker) {
+    check = "ec -config .config/editorconfig-checker.json {{ files }}"
+  }
+  ["mise"] = Builtins.mise
+}
+
+// -- Compose --
+local compose = new Mapping<String, Step> {
+  ["compose-validate"] {
+    glob = "**/compose.yml"
+    check = "docker compose config --quiet"
+  }
+}
+
+// -- File hygiene --
+local hygiene = new Mapping<String, Step> {
+  ["byte_order_marker"] = Builtins.byte_order_marker
+  ["check_added_large_files"] = Builtins.check_added_large_files
+  // TODO: re-enable after hk fix — v1.34.0 false-positives (compares file with itself)
+  // ["check_case_conflict"] = Builtins.check_case_conflict
+  ["check_executables_have_shebangs"] = Builtins.check_executables_have_shebangs
+  ["check_merge_conflict"] = Builtins.check_merge_conflict
+  ["check_symlinks"] = Builtins.check_symlinks
+  ["detect_private_key"] = Builtins.detect_private_key
+  ["fix_smart_quotes"] = Builtins.fix_smart_quotes
+  ["mixed_line_ending"] = Builtins.mixed_line_ending
+  ["newlines"] = Builtins.newlines
+  ["no_commit_to_branch"] = Builtins.no_commit_to_branch
+  ["trailing_whitespace"] = Builtins.trailing_whitespace
+}
+
+// -- All steps in one parallel group --
+local all = new Group {
+  steps {
+    ...yaml
+    ...json
+    ...toml
+    ...shell
+    ...pklSteps
+    ...dockerfile
+    ...actions
+    ...prose
+    ...config
+    ...compose
+    ...hygiene
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Hooks
+// ---------------------------------------------------------------------------
+
+exclude = excluded
+
+hooks {
+  ["pre-commit"] {
+    fix = true
+    stash = "git"
+    steps { ["all"] = all }
+  }
+  ["fix"] {
+    fix = true
+    steps { ["all"] = all }
+  }
+  ["check"] {
+    steps { ["all"] = all }
+  }
+}

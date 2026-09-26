@@ -1,0 +1,117 @@
+amends "package://github.com/jdx/hk/releases/download/v2.0.1/hk@2.0.1#/Config.pkl"
+
+import "package://github.com/jdx/hk/releases/download/v2.0.1/hk@2.0.1#/Builtins.pkl"
+
+min_hk_version = "2.0.1"
+default_branch = "main"
+exclude = List(".venv/**", ".cache/**", "docs/reference/**")
+
+local validateGroup = new Group {
+  steps {
+    ["hk-validate"] { check = "hk validate" }
+  }
+}
+
+local formatGroup = new Group {
+  steps {
+    ["ruff-format"] = (Builtins.ruff_format) {
+      check_after_diff = false
+      check_diff = null
+      check_list_files = null
+      check = "uv run --locked ruff format --config .config/ruff.toml --check {{files}}"
+      fix = "uv run --locked ruff format --config .config/ruff.toml {{files}}"
+    }
+    ["tombi-format"] = (Builtins.tombi_format) {
+      check_after_diff = false
+      check_diff = null
+      check_list_files = null
+      exclude = List(".config/mise/config.toml", "uv.lock")
+      check = "tombi format --check {{files}}"
+      fix = "tombi format {{files}}"
+    }
+    ["mise-format"] = Builtins.mise
+    ["pkl-format"] = (Builtins.pkl_format) {
+      check = "pkl format --diff-name-only {{files}}"
+      fix = "pkl format --write {{files}}"
+    }
+  }
+}
+
+local lintGroup = new Group {
+  steps {
+    ["ruff-check"] = (Builtins.ruff) {
+      check = "uv run --locked ruff check --config .config/ruff.toml {{files}}"
+      fix = "uv run --locked ruff check --config .config/ruff.toml --fix {{files}}"
+    }
+    ["tombi-lint"] = (Builtins.tombi) {
+      check = "tombi lint --error-on-warnings {{files}}"
+    }
+    ["markdown"] = (Builtins.rumdl) {
+      check_after_diff = false
+      check_diff = null
+      check_list_files = null
+      check = "rumdl check --config .config/rumdl.toml --no-cache {{files}}"
+      fix = "rumdl fmt --config .config/rumdl.toml --no-cache {{files}}"
+    }
+  }
+}
+
+local mypyStep = (Builtins.mypy) {
+  check = "uv run --locked mypy --config-file .config/mypy.ini"
+  batch = false
+}
+
+local typesGroup = new Group {
+  steps {
+    ["basedpyright"] {
+      glob = List("**/*.py", "**/*.pyi")
+      profiles = List("!SLOW")
+      check = "uv run --locked basedpyright --project .config/basedpyright.json"
+      batch = false
+    }
+    ["mypy-slow"] = (mypyStep) { profiles = List("SLOW") }
+    ["mypy-ci"] = (mypyStep) { profiles = List("CI", "!SLOW") }
+  }
+}
+
+local testGroup = new Group {
+  steps {
+    ["pytest"] {
+      check = "uv run --locked pytest -c .config/pytest.ini"
+    }
+    ["pkl-test"] = (Builtins.pkl) {
+      glob = List(".config/hk.pkl", "tests/*.pkl")
+      check = "pkl test tests/hk_contract.pkl"
+      batch = false
+    }
+  }
+}
+
+local checks = new Mapping<String, Step | Group> {
+  ["validate"] = validateGroup
+  ["format"] = formatGroup
+  ["lint"] = lintGroup
+  ["types"] = typesGroup
+}
+local checksAndTests = (checks) { ["test"] = testGroup }
+
+hooks {
+  ["check"] { fix = false; stage = false; steps = checks }
+  ["fix"] { fix = true; stage = false; steps = checks }
+  ["pre-commit"] { fix = false; stage = false; stash = "git"; steps = checksAndTests }
+  // Hook env cannot select the outer hk scheduler's profiles. Dispatch once to
+  // a distinct helper hook with SLOW selected on its actual CLI instead.
+  ["pre-push"] {
+    fix = false
+    stage = false
+    steps {
+      ["slow-checks"] { check = "hk --profile SLOW run pre-push-checks --all" }
+    }
+  }
+  ["pre-push-checks"] { fix = false; stage = false; steps = checksAndTests }
+  ["validate"] { fix = false; stage = false; steps { ["validate"] = validateGroup } }
+  ["format"] { fix = false; stage = false; steps { ["format"] = formatGroup } }
+  ["lint"] { fix = false; stage = false; steps { ["lint"] = lintGroup } }
+  ["types"] { fix = false; stage = false; steps { ["types"] = typesGroup } }
+  ["test"] { fix = false; stage = false; steps { ["test"] = testGroup } }
+}
