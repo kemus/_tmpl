@@ -25,6 +25,7 @@ default = 120
 
 # An hk step fails when `tmpl sync` would change anything, e.g. after a PEP 723 header edit (§5.3).
 # It runs the tmpl release that last reconciled the repo, so CI needs read access to that source.
+# `--no-config` ignores the user's uv config, whose `no-build` would refuse to build tmpl from git.
 [options.sync_check]
 scope = "root"
 type = "bool"
@@ -62,7 +63,7 @@ data = { name = "newlines", builtin = "newlines", hooks = ["pre-commit", "check"
 sink = "hk.steps"
 order = 90
 when = "{{ sync_check }}"
-data = { name = "tmpl_sync", check = "uvx --from {{ tmpl_spec }} tmpl sync --check", hooks = ["pre-push", "check"], slow = true }
+data = { name = "tmpl_sync", check = "uvx --no-config --from {{ tmpl_spec }} tmpl sync --check", hooks = ["pre-push", "check"], slow = true }
 
 [[fragment]]
 sink = "mise.tools"

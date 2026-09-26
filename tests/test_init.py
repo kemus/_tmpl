@@ -97,7 +97,7 @@ def test_sync_check_reports_a_manifest_to_restamp(tmp_path: Path, capsys: pytest
 def test_sync_check_hk_step_runs_the_recorded_release(tmp_path: Path) -> None:
     repo = tmp_path / "on"
     assert run("init", str(repo), "--unit", "python:lib", "--no-setup") == 0
-    step = 'check = "uvx --from git+https://github.com/kemus/_tmpl@v0.1.0 tmpl sync --check"'
+    step = 'check = "uvx --no-config --from git+https://github.com/kemus/_tmpl@v0.1.0 tmpl sync --check"'
     assert step in (repo / ".config/hk.pkl").read_text()
 
     off = tmp_path / "off"

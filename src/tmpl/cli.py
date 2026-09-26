@@ -276,7 +276,10 @@ def _render_base(recorded: Manifest, repo: Path) -> Tree:
         return render(recorded, repo.name, repo, base=True)
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "out"
-        proc.check("uvx", "--from", recorded.spec, "tmpl", "render", "--repo", str(repo), "--out", str(out))
+        # `--no-config`: a user `no-build` would refuse the git source.
+        proc.check(
+            "uvx", "--no-config", "--from", recorded.spec, "tmpl", "render", "--repo", str(repo), "--out", str(out)
+        )
         index = json.loads((out / RENDER_INDEX).read_text())
         return {path: RenderedFile((out / path).read_text(), **meta) for path, meta in index.items()}
 

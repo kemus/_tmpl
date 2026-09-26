@@ -343,7 +343,7 @@ Bumps `version` (default: latest release) and reconciles. It prints new or chang
 
 Reconciles the current manifest at the current version, e.g. after a hand edit of `.config/tmpl.toml` or after changing an option with `tmpl set KEY=VALUE`.
 
-`--check` writes nothing. It prints the diff and exits 1 when a sync would change anything, including restamping the manifest's `version`. It accepts a dirty worktree. With the root option `sync_check` (default `true`), the root layer adds an hk step `tmpl_sync` running `uvx --from <source>@v<version> tmpl sync --check`, the release the manifest records. The step is slow: it runs on `pre-push` and in CI. It catches drift that only a sync repairs, such as a PEP 723 header that no longer matches the `scripts` dependency group (§5.3). CI needs read access to `source`.
+`--check` writes nothing. It prints the diff and exits 1 when a sync would change anything, including restamping the manifest's `version`. It accepts a dirty worktree. With the root option `sync_check` (default `true`), the root layer adds an hk step `tmpl_sync` running `uvx --no-config --from <source>@v<version> tmpl sync --check`, the release the manifest records. The step is slow: it runs on `pre-push` and in CI. It catches drift that only a sync repairs, such as a PEP 723 header that no longer matches the `scripts` dependency group (§5.3). CI needs read access to `source`.
 
 ### 8.8 Read-only commands
 
@@ -376,7 +376,7 @@ The tool also detects existing mise, hk, and CI config and maps it into the reco
 ## 10. Versioning and base rendering
 
 - `tmpl` releases are semver git tags (`v0.1.0`, …) on this repo. Templates ship inside the Python package, so a tag pins the tool and its templates together.
-- The old base is rendered by **the old release itself**: `uvx --from git+<source>@v<old> tmpl render <tmp> --repo <repo>`, which writes the tree plus a `.tmpl-render.json` index of each file's policy. Rendering logic changes between versions can't corrupt the base. uv's cache keeps repeated updates cheap and makes them work offline after the first run.
+- The old base is rendered by **the old release itself**: `uvx --no-config --from git+<source>@v<old> tmpl render <tmp> --repo <repo>`, which writes the tree plus a `.tmpl-render.json` index of each file's policy. Rendering logic changes between versions can't corrupt the base. uv's cache keeps repeated updates cheap and makes them work offline after the first run.
 - `render` is the internal, side-effect-free primitive: manifest in, file tree out. Every other command is built on it, and it is the stable contract between versions. `tmpl render` produces the base side (§2.3).
 
 ## 11. Implementation
