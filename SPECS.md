@@ -183,7 +183,7 @@ Cells hold the kind-specific default (alternatives after `·`, all selectable as
 
 Go/rust github-action units expect the `release` feature on the unit, because the composite action downloads the released binary.
 
-`tmpl add` takes language first (`tmpl add rust cli crates/foo`) because it's usually the settled decision. Interactively it asks for whatever is missing and filters choices through the matrix, so either order works.
+`tmpl add` takes the same `LANG:KIND[@PATH]` spec as `init --unit` (`tmpl add rust:cli@crates/foo`), language first because it's usually the settled decision, and checks it against the matrix.
 
 ### 4.3 Features (cross-cutting add-ons)
 
@@ -322,9 +322,9 @@ Every mutating command refuses to run on a dirty worktree (`--allow-dirty` overr
 3. **Record** the manifest. From here on, the base is `render(manifest, version)`, not the user's file. Existing differences therefore count as intentional edits, and future updates bring in only template changes.
 4. Optionally run setup. Adopt never commits.
 
-### 8.3 `tmpl add LANG KIND [PATH]`
+### 8.3 `tmpl add LANG:KIND[@PATH]`
 
-Adds a unit (checked against the matrix and against existing units at the same path), prompts for missing unit and lang options, and reconciles. Adding the first unit of a new language also pulls in that language's layer. Adding a second unit (or one off `.`) creates the workspace root.
+Adds a unit (checked against the matrix and against existing units at the same path) and reconciles. Unit options, and the language's options when the unit brings a new language, come from `--opt KEY=VALUE` or their defaults. Adding the first unit of a new language also pulls in that language's layer. Adding a second unit (or one off `.`) creates the workspace root.
 
 ### 8.4 `tmpl remove PATH`
 
@@ -344,7 +344,11 @@ Bumps `version` (default: latest release) and reconciles. It prints new or chang
 
 ### 8.7 `tmpl sync`
 
-Reconciles the current manifest at the current version, e.g. after a hand edit of `.config/tmpl.toml` or after changing an option with `tmpl set KEY=VALUE`.
+Reconciles the current manifest at the current version, e.g. after a hand edit of `.config/tmpl.toml`.
+
+`tmpl set KEY=VALUE… [--unit PATH]` is that edit plus the sync in one step. Each key goes to the root, a language present, or the unit that declares it; `--unit` picks one when several units do. Values are checked against the option's type and choices, and live-sourced options (§3.2) are refused: edit their source file instead.
+
+`add`, `remove` and `set` take the repo as `--repo` (default: the current directory) and need a manifest with a `version`; on one from `adopt --plan`, edit it and run `tmpl sync` instead.
 
 The base is the manifest the last reconcile applied. Every reconcile stamps `applied`, the hash of the manifest's normalized content without that line. When the file still hashes to it, the file is the base. Otherwise it was hand-edited, and sync walks the file's git history, newest first, for the version with that hash; the common case needs no history, so shallow CI clones work. If no commit holds it (a reconcile left uncommitted, then edited again), sync refuses: commit reconciles before editing the manifest.
 
