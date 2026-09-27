@@ -5,6 +5,8 @@ import re
 import sys
 import tempfile
 import tomllib
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import Annotated
 
@@ -85,11 +87,24 @@ def _parse_unit(spec: str) -> Unit:
     if match is None:
         msg = f"unit {spec!r}: expected LANG:KIND[@PATH], e.g. python:cli@."
         raise UsageError(msg)
-    lang, kind, path = match["lang"], match["kind"], (match["path"] or ".").strip("/") or "."
+    lang, kind, path = match["lang"], match["kind"], _unit_path(match["path"] or ".")
     if not catalog.supported(lang, kind):
         msg = f"unit {spec!r}: {lang}/{kind} is not in this version's catalog"
         raise UsageError(msg)
     return Unit(path, lang, kind)
+
+
+def _unit_path(path: str) -> str:
+    return path.strip().strip("/") or "."
+
+
+def _find_unit(current: Manifest, path: str) -> Unit:
+    path = _unit_path(path)
+    for unit in current.unit:
+        if unit.path == path:
+            return unit
+    msg = f"no unit at {path}; units: {', '.join(u.path for u in current.unit)}"
+    raise UsageError(msg)
 
 
 def _parse_opts(pairs: list[str]) -> dict[str, object]:
@@ -241,15 +256,26 @@ def sync(path: Path = Path(), *, check: Flag = False, opts: Reconcile | None = N
     check
         Write nothing, print the diff, and exit 1 if a sync would change anything (implies --allow-dirty).
     """
-    opts = opts or Reconcile()
-    repo = path.resolve()
+    return _reconcile(path.resolve(), opts or Reconcile(), check=check)
+
+
+def _reconcile(
+    repo: Path, opts: Reconcile, change: Callable[[Manifest], None] | None = None, *, check: bool = False
+) -> int:
+    """Apply `change` to the manifest, then reconcile against the render of the manifest as last applied (§2.3)."""
     _check_repo(repo, allow_dirty=opts.allow_dirty or opts.dry_run or check)
     current = manifest.load(repo)
     if current is None:
         msg = f"no {manifest.MANIFEST_PATH} in {repo}; use `tmpl adopt`"
         raise UsageError(msg)
     applied = _applied(repo, current)
+    if change is not None and applied is None:
+        msg = f"{manifest.MANIFEST_PATH} has no version yet (from `adopt --plan`); edit it, then run `tmpl sync`"
+        raise UsageError(msg)
+    # Before any change: `applied` may be `current` itself.
     base = _render_base(applied, repo) if applied else None
+    if change is not None:
+        change(current)
     current.version = __version__
     manifest.stamp(current)
     actions = reconcile.plan(repo, base, render(current, repo.name, repo), opts.prefer)
@@ -258,6 +284,126 @@ def sync(path: Path = Path(), *, check: Flag = False, opts: Reconcile | None = N
     if not opts.dry_run:
         manifest.dump(repo, current)
     return _finish(repo, actions, dry_run=opts.dry_run)
+
+
+@app.command
+def add(spec: str, *, opt: list[str] | None = None, repo: Path = Path(), opts: Reconcile | None = None) -> int:
+    """Add a unit to the manifest and reconcile; options not given take their defaults.
+
+    Parameters
+    ----------
+    spec
+        LANG:KIND[@PATH], e.g. python:cli@apps/tool; PATH is relative to the repo root and defaults to `.`.
+    opt
+        KEY=VALUE for a unit option, or a language option when the unit brings a new language; repeatable.
+    repo
+        Repository to change.
+    """
+    root = repo.resolve()
+    unit = _parse_unit(spec)
+    given = _parse_opts(opt or [])
+
+    def change(current: Manifest) -> None:
+        if any(u.path == unit.path for u in current.unit):
+            msg = f"a unit already lives at {unit.path}"
+            raise UsageError(msg)
+        unit_specs = catalog.options_for(catalog.unit_layer_ids(unit.lang, unit.kind), "unit")
+        new_lang = unit.lang not in current.langs
+        lang_specs = catalog.options_for([f"lang/{unit.lang}"], "lang") if new_lang else {}
+        if unknown := sorted(set(given) - set(unit_specs) - set(lang_specs)):
+            hint = "" if new_lang else f"; set {unit.lang} options with `tmpl set`"
+            msg = f"unknown options for this unit: {unknown}{hint}"
+            raise UsageError(msg)
+        unit.options = catalog.resolve(unit_specs, _picked(given, unit_specs), root / unit.path).stored
+        if lang_specs and (stored := catalog.resolve(lang_specs, _picked(given, lang_specs), root).stored):
+            current.lang[unit.lang] = stored
+        current.unit.append(unit)
+
+    return _reconcile(root, opts or Reconcile(), change)
+
+
+@app.command
+def remove(path: str, *, repo: Path = Path(), opts: Reconcile | None = None) -> int:
+    """Remove the unit at PATH from the manifest and reconcile.
+
+    Its files are deleted only if unchanged from the last reconcile; modified ones are kept and listed, and the
+    command exits 1. Removing a language's last unit removes the language too.
+
+    Parameters
+    ----------
+    path
+        Unit path relative to the repo root.
+    repo
+        Repository to change.
+    """
+
+    def change(current: Manifest) -> None:
+        unit = _find_unit(current, path)
+        current.unit.remove(unit)
+        if unit.lang not in current.langs:
+            current.lang.pop(unit.lang, None)
+
+    return _reconcile(repo.resolve(), opts or Reconcile(), change)
+
+
+@app.command(name="set")
+def set_cmd(*pairs: str, unit: str | None = None, repo: Path = Path(), opts: Reconcile | None = None) -> int:
+    """Set manifest options and reconcile.
+
+    Parameters
+    ----------
+    pairs
+        KEY=VALUE for a root, language or unit option.
+    unit
+        Path of the unit whose option to set; needed when several units declare it.
+    repo
+        Repository to change.
+    """
+    given = _parse_opts(list(pairs))
+    if not given:
+        msg = "no KEY=VALUE given"
+        raise UsageError(msg)
+
+    def change(current: Manifest) -> None:
+        for key, value in given.items():
+            table, spec = _option_table(current, key, unit)
+            table[key] = spec.coerce(key, value)
+
+    return _reconcile(repo.resolve(), opts or Reconcile(), change)
+
+
+def _picked(given: dict[str, object], specs: dict[str, catalog.OptionSpec]) -> dict[str, object]:
+    return {k: v for k, v in given.items() if k in specs}
+
+
+def _option_table(current: Manifest, key: str, unit: str | None) -> tuple[dict[str, object], catalog.OptionSpec]:
+    """The manifest table storing option `key`, with its spec: the root, a language present, or a unit."""
+    # Each scope's table is fetched only once the key matches, so a language gains no empty table.
+    scopes: list[tuple[Callable[[], dict[str, object]], dict[str, catalog.OptionSpec]]] = []
+    if unit is None:
+        scopes.append((lambda: current.root, catalog.options_for(["root"], "root")))
+        scopes += [
+            (partial(current.lang.setdefault, lang, {}), catalog.options_for([f"lang/{lang}"], "lang"))
+            for lang in current.langs
+        ]
+    units = current.unit if unit is None else [_find_unit(current, unit)]
+    scopes += [
+        (partial(getattr, u, "options"), catalog.options_for(catalog.unit_layer_ids(u.lang, u.kind), "unit"))
+        for u in units
+    ]
+    found = [(table, spec) for table, specs in scopes if (spec := specs.get(key))]
+    if not found:
+        where = f"the unit at {_unit_path(unit)}" if unit is not None else "this repo's layers"
+        msg = f"option {key!r}: not declared by {where}"
+        raise UsageError(msg)
+    if len(found) > 1:
+        msg = f"option {key!r} is declared by several units; pass --unit PATH"
+        raise UsageError(msg)
+    table, spec = found[0]
+    if spec.source:
+        msg = f"option {key!r} is read from {spec.source}; edit that instead"
+        raise UsageError(msg)
+    return table(), spec
 
 
 def _applied(repo: Path, current: Manifest) -> Manifest | None:
