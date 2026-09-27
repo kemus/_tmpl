@@ -82,16 +82,65 @@ def test_sync_check_reports_drift_without_writing(tmp_path: Path, capsys: pytest
     assert git(repo, "status", "--porcelain").splitlines() == [" M scripts/example.py"]
 
 
-def test_sync_check_reports_a_manifest_to_restamp(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def _edit_manifest(repo: Path, old: str, new: str) -> None:
+    path = repo / manifest.MANIFEST_PATH
+    text = path.read_text()
+    assert old in text
+    path.write_text(text.replace(old, new))
+
+
+def _indent_size(repo: Path) -> str:
+    """The `[*]` section's indent_size line in `.editorconfig`."""
+    section = (repo / ".editorconfig").read_text().split("[*]\n")[1].split("\n[")[0]
+    return next(line for line in section.splitlines() if line.startswith("indent_size"))
+
+
+@pytest.mark.parametrize("commit", [True, False])
+def test_sync_applies_a_manifest_hand_edit(tmp_path: Path, *, commit: bool) -> None:
     repo = tmp_path / "new-tool"
     assert run("init", str(repo), "--unit", "python:lib", "--no-setup") == 0
-    path = repo / manifest.MANIFEST_PATH
-    path.write_text(path.read_text().replace('version = "0.1.0"\n', ""))
-    commit_all(repo, "unversioned")
+    _edit_manifest(repo, 'indent = "2"', 'indent = "4"')
+    if commit:
+        commit_all(repo, "switch to 4-space indent")
+    assert run("sync", str(repo)) == 0
+    assert _indent_size(repo) == "indent_size = 4"
+    recorded = manifest.load(repo)
+    assert recorded is not None
+    assert recorded.applied == manifest.digest(recorded)
+
+
+def test_sync_check_reports_a_manifest_hand_edit(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = tmp_path / "new-tool"
+    assert run("init", str(repo), "--unit", "python:lib", "--no-setup") == 0
+    _edit_manifest(repo, 'indent = "2"', 'indent = "4"')
+    commit_all(repo, "switch to 4-space indent")
     capsys.readouterr()
     assert run("sync", str(repo), "--check") == 1
-    assert "(version unset -> 0.1.0)" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "  update  .editorconfig" in out
+    assert "  update  .config/tmpl.toml" in out
     assert git(repo, "status", "--porcelain") == ""
+
+
+def test_sync_refuses_an_edit_over_an_uncommitted_reconcile(tmp_path: Path) -> None:
+    repo = tmp_path / "new-tool"
+    assert run("init", str(repo), "--unit", "python:lib", "--no-setup") == 0
+    _edit_manifest(repo, 'indent = "2"', 'indent = "4"')
+    assert run("sync", str(repo)) == 0
+    # The manifest that sync applied was never committed, so a second edit leaves no base to find.
+    _edit_manifest(repo, 'indent = "4"', 'indent = "tab"')
+    with pytest.raises(UsageError, match="no commit holds the manifest"):
+        run("sync", str(repo), "--allow-dirty")
+
+
+def test_render_takes_a_given_manifest(tmp_path: Path) -> None:
+    repo = tmp_path / "new-tool"
+    assert run("init", str(repo), "--unit", "python:lib", "--no-setup") == 0
+    other = tmp_path / "tmpl.toml"
+    other.write_text((repo / manifest.MANIFEST_PATH).read_text().replace('indent = "2"', 'indent = "tab"'))
+    out = tmp_path / "out"
+    assert run("render", str(out), "--repo", str(repo), "--manifest", str(other)) == 0
+    assert "indent_style = tab" in (out / ".editorconfig").read_text()
 
 
 def test_sync_check_hk_step_runs_the_recorded_release(tmp_path: Path) -> None:

@@ -4,6 +4,7 @@ import json
 import re
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 from typing import Annotated
 
@@ -171,6 +172,7 @@ def init(
         created.root["author"] = git.config(repo, "user.name") or ""
     # An empty base, unlike adopt's missing one, creates scaffold source.
     actions = reconcile.plan(repo, {}, render(created, repo.name, repo))
+    manifest.stamp(created)
     manifest.dump(repo, created)
     reconcile.apply(repo, actions)
     if not no_setup:
@@ -221,6 +223,7 @@ def adopt(
     proposed.version = __version__
     actions = reconcile.plan(repo, None, render(proposed, repo.name, repo), opts.prefer)
     if not opts.dry_run:
+        manifest.stamp(proposed)
         manifest.dump(repo, proposed)
     return _finish(repo, actions, dry_run=opts.dry_run)
 
@@ -245,27 +248,51 @@ def sync(path: Path = Path(), *, check: Flag = False, opts: Reconcile | None = N
     if current is None:
         msg = f"no {manifest.MANIFEST_PATH} in {repo}; use `tmpl adopt`"
         raise UsageError(msg)
-    recorded = current.version
-    base = _render_base(current, repo) if recorded else None
+    applied = _applied(repo, current)
+    base = _render_base(applied, repo) if applied else None
     current.version = __version__
+    manifest.stamp(current)
     actions = reconcile.plan(repo, base, render(current, repo.name, repo), opts.prefer)
     if check:
-        return _check(repo, actions, recorded)
+        return _check(repo, actions, current)
     if not opts.dry_run:
         manifest.dump(repo, current)
     return _finish(repo, actions, dry_run=opts.dry_run)
 
 
-def _check(repo: Path, actions: list[reconcile.Action], recorded: str) -> int:
-    """Report drift: any action but a note, or a manifest a sync would restamp with this version."""
+def _applied(repo: Path, current: Manifest) -> Manifest | None:
+    """The manifest as the last reconcile applied it, the base's desired state (§2.3); None before any reconcile.
+
+    A hand edit since then leaves `applied` naming an earlier content, which the manifest's git history holds.
+    """
+    if not current.version:
+        return None
+    if current.applied is None or manifest.digest(current) == current.applied:
+        return current
+    for text in git.file_history(repo, manifest.MANIFEST_PATH.as_posix()):
+        try:
+            past = manifest.loads(text)
+        except (tomllib.TOMLDecodeError, cattrs.BaseValidationError):
+            continue
+        if manifest.digest(past) == current.applied:
+            return past
+    msg = (
+        f"{manifest.MANIFEST_PATH} was edited since the last reconcile, and no commit holds the manifest that "
+        f"reconcile wrote ({current.applied}); commit reconciles before editing the manifest"
+    )
+    raise UsageError(msg)
+
+
+def _check(repo: Path, actions: list[reconcile.Action], stamped: Manifest) -> int:
+    """Report drift: any action but a note, or a manifest a sync would rewrite (new version or hand edits)."""
     drift = [a for a in actions if a.op != "noted"]
-    if not drift and recorded == __version__:
+    path = manifest.MANIFEST_PATH.as_posix()
+    if (repo / path).read_text() != (text := manifest.dumps(stamped)):
+        drift.append(reconcile.Action(path, "update", text))
+    if not drift:
         return 0
     sys.stdout.write(reconcile.diff(repo, drift))
-    if drift:
-        _out(reconcile.summary(drift))
-    if recorded != __version__:
-        _out(f"{'update':>8}  {manifest.MANIFEST_PATH}  (version {recorded or 'unset'} -> {__version__})")
+    _out(reconcile.summary(drift))
     _err("tmpl: out of sync with the manifest; run `tmpl sync`")
     return 1
 
@@ -275,17 +302,23 @@ def _render_base(recorded: Manifest, repo: Path) -> Tree:
     if recorded.version == __version__:
         return render(recorded, repo.name, repo, base=True)
     with tempfile.TemporaryDirectory() as tmp:
-        out = Path(tmp) / "out"
+        out, applied = Path(tmp) / "out", Path(tmp) / "tmpl.toml"
+        # The repo's manifest may carry hand edits since; the release renders the applied one.
+        applied.write_text(manifest.dumps(recorded))
         # `--no-config`: a user `no-build` would refuse the git source.
-        proc.check(
-            "uvx", "--no-config", "--from", recorded.spec, "tmpl", "render", "--repo", str(repo), "--out", str(out)
-        )
+        release = ("uvx", "--no-config", "--from", recorded.spec, "tmpl")
+        proc.check(*release, "render", "--repo", str(repo), "--manifest", str(applied), "--out", str(out))
         index = json.loads((out / RENDER_INDEX).read_text())
         return {path: RenderedFile((out / path).read_text(), **meta) for path, meta in index.items()}
 
 
 @app.command(name="render")
-def render_cmd(out: Path, *, repo: Path = Path()) -> int:
+def render_cmd(
+    out: Path,
+    *,
+    repo: Path = Path(),
+    manifest_file: Annotated[Path | None, Parameter(name="--manifest")] = None,
+) -> int:
     """Render the repo's manifest into OUT, with a policy index: the base for syncs from a later tmpl version.
 
     Parameters
@@ -294,9 +327,11 @@ def render_cmd(out: Path, *, repo: Path = Path()) -> int:
         Empty output directory.
     repo
         Repository whose manifest (and live-sourced options) to render.
+    manifest_file
+        Render this manifest instead of the repo's, with the repo's live-sourced options.
     """
     repo = repo.resolve()
-    recorded = manifest.load(repo)
+    recorded = manifest.loads(manifest_file.read_text()) if manifest_file else manifest.load(repo)
     if recorded is None:
         msg = f"no {manifest.MANIFEST_PATH} in {repo}"
         raise UsageError(msg)

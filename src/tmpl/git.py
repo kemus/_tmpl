@@ -8,6 +8,7 @@ from tmpl import proc
 from tmpl.manifest import MANIFEST_PATH
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
 
@@ -35,6 +36,12 @@ def dirty_paths(repo: Path) -> list[str]:
     lines = run(repo, "status", "--porcelain", "--untracked-files=all").splitlines()
     paths = [line[3:] for line in lines]
     return [p for p in paths if p != MANIFEST_PATH.as_posix()]
+
+
+def file_history(repo: Path, path: str) -> Iterator[str]:
+    """The committed contents of `path`, newest first."""
+    for commit in run(repo, "log", "--format=%H", "--", path).split():
+        yield run(repo, "show", f"{commit}:{path}")
 
 
 def add_force(repo: Path, paths: list[str]) -> None:

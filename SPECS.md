@@ -61,13 +61,15 @@ A kind whose units are not packages (python `scripts`) sets `package = false` on
 Every mutating command follows the same two steps: **change the desired state** (manifest + template version), then **reconcile**.
 
 ```
-base   = render(old_manifest, old_version)     # empty for adopt / new files
+base   = render(applied_manifest, old_version) # empty for adopt / new files
 target = render(new_manifest, new_version)
 ours   = working tree
 for each path in base ∪ target: merge(base, ours, target) → write / delete / conflict
 ```
 
 Live-sourced options (§3.2) are read once from `ours` and passed to both renders, so a hand-edited `requires-python` never shows up as template drift. Derived data whose source is another file (python script dependencies, §5.3) is the exception: the base reads it from the file it lands in, as the last reconcile wrote it, so a changed source reaches the merge as template drift.
+
+`applied_manifest` is the manifest as the last reconcile wrote it, not the file as it stands, so a hand edit of an option reaches the merge as a desired-state change (§3.3 `applied`).
 
 | Command | Desired-state change |
 |---|---|
@@ -93,13 +95,14 @@ Three facts can't be recovered reliably from the tree:
 
 - Store only answers that can't be derived. Options can declare a **live source** (e.g. `python_version ← pyproject.toml:project.requires-python`). These are read from the working tree before rendering and never stored, so they can't go stale.
 - Store *resolved* values for everything else, including defaults. That way, changing a default in the templates never silently changes old repos; `update` reports new or changed defaults instead.
-- Write it only through the tool (adopt writes it first). Hand edits are allowed and followed by `tmpl sync`.
+- Write it only through the tool (adopt writes it first). Hand edits are allowed and followed by `tmpl sync`, which finds the manifest it last applied through the `applied` hash (§3.3).
 
 ### 3.3 Schema
 
 ```toml
 version = "0.4.0"                 # tmpl release that produced the last render
 # source = "git+https://github.com/kemus/_tmpl"   # optional override (forks / local dev)
+applied = "sha256:…"              # hash of this file, minus this line, as the last reconcile wrote it
 
 [root]
 description = "…"
@@ -343,7 +346,9 @@ Bumps `version` (default: latest release) and reconciles. It prints new or chang
 
 Reconciles the current manifest at the current version, e.g. after a hand edit of `.config/tmpl.toml` or after changing an option with `tmpl set KEY=VALUE`.
 
-`--check` writes nothing. It prints the diff and exits 1 when a sync would change anything, including restamping the manifest's `version`. It accepts a dirty worktree. With the root option `sync_check` (default `true`), the root layer adds an hk step `tmpl_sync` running `uvx --no-config --from <source>@v<version> tmpl sync --check`, the release the manifest records. The step is slow: it runs on `pre-push` and in CI. It catches drift that only a sync repairs, such as a PEP 723 header that no longer matches the `scripts` dependency group (§5.3). CI needs read access to `source`.
+The base is the manifest the last reconcile applied. Every reconcile stamps `applied`, the hash of the manifest's normalized content without that line. When the file still hashes to it, the file is the base. Otherwise it was hand-edited, and sync walks the file's git history, newest first, for the version with that hash; the common case needs no history, so shallow CI clones work. If no commit holds it (a reconcile left uncommitted, then edited again), sync refuses: commit reconciles before editing the manifest.
+
+`--check` writes nothing. It prints the diff and exits 1 when a sync would change anything, including restamping the manifest's `version` or `applied` hash. It accepts a dirty worktree. With the root option `sync_check` (default `true`), the root layer adds an hk step `tmpl_sync` running `uvx --no-config --from <source>@v<version> tmpl sync --check`, the release the manifest records. The step is slow: it runs on `pre-push` and in CI. It catches drift that only a sync repairs, such as a PEP 723 header that no longer matches the `scripts` dependency group (§5.3). CI needs read access to `source`.
 
 ### 8.8 Read-only commands
 
@@ -376,7 +381,7 @@ The tool also detects existing mise, hk, and CI config and maps it into the reco
 ## 10. Versioning and base rendering
 
 - `tmpl` releases are semver git tags (`v0.1.0`, …) on this repo. Templates ship inside the Python package, so a tag pins the tool and its templates together.
-- The old base is rendered by **the old release itself**: `uvx --no-config --from git+<source>@v<old> tmpl render <tmp> --repo <repo>`, which writes the tree plus a `.tmpl-render.json` index of each file's policy. Rendering logic changes between versions can't corrupt the base. uv's cache keeps repeated updates cheap and makes them work offline after the first run.
+- The old base is rendered by **the old release itself**: `uvx --no-config --from git+<source>@v<old> tmpl render <tmp> --repo <repo> --manifest <applied>`, which renders the applied manifest (§8.7) with the repo's live-sourced options and writes the tree plus a `.tmpl-render.json` index of each file's policy. Rendering logic changes between versions can't corrupt the base. uv's cache keeps repeated updates cheap and makes them work offline after the first run.
 - `render` is the internal, side-effect-free primitive: manifest in, file tree out. Every other command is built on it, and it is the stable contract between versions. `tmpl render` produces the base side (§2.3).
 
 ## 11. Implementation

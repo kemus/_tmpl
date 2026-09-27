@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -36,6 +37,9 @@ class Manifest:
     # and the next `sync` reconciles it against an empty base (§8.2).
     version: str = ""
     source: str | None = None
+    # Hash of the manifest as the last reconcile wrote it (`digest`). A mismatch means a hand edit since, and the
+    # applied state is found in the manifest's git history.
+    applied: str | None = None
     root: Options = attrs.field(factory=dict[str, object])
     lang: dict[str, Options] = attrs.field(factory=dict[str, Options])
     unit: list[Unit] = attrs.field(factory=list[Unit])
@@ -67,6 +71,8 @@ def dumps(manifest: Manifest) -> str:
     doc.add("version", manifest.version)
     if manifest.source:
         doc.add("source", manifest.source)
+    if manifest.applied:
+        doc.add("applied", manifest.applied)
     doc.add(tomlkit.nl())
     doc.add("root", _table(manifest.root))
     langs = tomlkit.table(is_super_table=True)
@@ -86,6 +92,17 @@ def dumps(manifest: Manifest) -> str:
         units.append(table)
     doc.add("unit", AoT(units))
     return tomlkit.dumps(doc)
+
+
+def digest(manifest: Manifest) -> str:
+    """Hash of the manifest's normalized content, without its own `applied` stamp."""
+    text = dumps(attrs.evolve(manifest, applied=None))
+    return f"sha256:{hashlib.sha256(text.encode()).hexdigest()}"
+
+
+def stamp(manifest: Manifest) -> None:
+    """Record the manifest as applied: a later mismatch with `digest` reveals a hand edit."""
+    manifest.applied = digest(manifest)
 
 
 def dump(repo: Path, manifest: Manifest) -> None:
