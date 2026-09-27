@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from tmpl import manifest
+from tmpl import __version__, manifest
 from tmpl.cli import UsageError, app
 from tmpl.detect import detect
 
@@ -29,7 +29,10 @@ def test_init_creates_committed_scaffold(tmp_path: Path) -> None:
     assert tomllib.loads((repo / "pyproject.toml").read_text())["project"]["name"] == "new-tool"
 
     assert git(repo, "status", "--porcelain") == ""
-    assert git(repo, "log", "--format=%s").splitlines() == ["chore: scaffold with tmpl 0.1.0", "initial commit"]
+    assert git(repo, "log", "--format=%s").splitlines() == [
+        f"chore: scaffold with tmpl {__version__}",
+        "initial commit",
+    ]
     assert "third_party/.gitkeep" in git(repo, "ls-files", "third_party")
 
 
@@ -143,10 +146,23 @@ def test_render_takes_a_given_manifest(tmp_path: Path) -> None:
     assert "indent_style = tab" in (out / ".editorconfig").read_text()
 
 
+def test_sync_check_reports_a_manifest_to_restamp(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = tmp_path / "new-tool"
+    assert run("init", str(repo), "--unit", "python:lib", "--no-setup") == 0
+    _edit_manifest(repo, f'version = "{__version__}"\n', "")
+    commit_all(repo, "unversioned")
+    capsys.readouterr()
+    assert run("sync", str(repo), "--check") == 1
+    out = capsys.readouterr().out
+    assert f'+version = "{__version__}"' in out
+    assert "  update  .config/tmpl.toml" in out
+    assert git(repo, "status", "--porcelain") == ""
+
+
 def test_sync_check_hk_step_runs_the_recorded_release(tmp_path: Path) -> None:
     repo = tmp_path / "on"
     assert run("init", str(repo), "--unit", "python:lib", "--no-setup") == 0
-    step = 'check = "uvx --no-config --from git+https://github.com/kemus/_tmpl@v0.1.0 tmpl sync --check"'
+    step = f'check = "uvx --no-config --from git+https://github.com/kemus/_tmpl@v{__version__} tmpl sync --check"'
     assert step in (repo / ".config/hk.pkl").read_text()
 
     off = tmp_path / "off"
