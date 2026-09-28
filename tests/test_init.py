@@ -203,7 +203,7 @@ def test_init_rejects_a_non_boolean_bool_option(tmp_path: Path) -> None:
         (["--unit", "python:cli", "--opt", "nope=1"], "unknown options"),
         (["--unit", "cobol:cli"], "not in this version's catalog"),
         (["--unit", "python"], "expected LANG:KIND"),
-        (["--unit", "python:cli", "--unit", "python:cli@."], "share a path"),
+        (["--unit", "python:cli", "--unit", "python:cli@."], "already lives at"),
     ],
 )
 def test_init_rejects_bad_input(tmp_path: Path, args: list[str], error: str) -> None:
