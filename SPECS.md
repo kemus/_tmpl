@@ -340,17 +340,21 @@ Removes the unit from the manifest and reconciles:
 
 Attaches a feature to or detaches it from the root (no `PATH`) or the unit at `PATH`, checked against §4.3, and reconciles. Root features are stored in `[root] features`, unit features in the unit's `features`. Adding one already attached, or removing one that isn't, is refused. Removal follows the same rules as §8.4. Removing a unit also removes its features.
 
-### 8.6 `tmpl update [--to VERSION]`
+### 8.6 `tmpl update [PATH] [--to VERSION]`
 
-Bumps `version` (default: latest release) and reconciles. It prints new or changed option defaults and asks only for options that are new and required.
+Bumps `version` (default: the latest `vX.Y.Z` tag in `source`, read with `git ls-remote`) and reconciles. The target release does the work: when it isn't the running one, tmpl runs `uvx --no-config --from <source>@v<VERSION> tmpl update --to <VERSION>` (`tmpl sync` for releases before 0.4.0, which lack `update`), passing `--prefer`, `--dry-run` and `--allow-dirty` on. The base is still rendered by the release that applied the manifest (§10).
+
+Options follow the target release. Ones it declares that the manifest lacks are stored with their defaults, and ones it no longer declares are dropped. Each is printed (`new  [root] key = value`, `dropped  [unit apps/tool] key = value`). Stored values are never changed, so a changed default reaches only options added by the update. Every option has a default, so update asks nothing.
 
 ### 8.7 `tmpl sync`
 
 Reconciles the current manifest at the current version, e.g. after a hand edit of `.config/tmpl.toml`.
 
+`sync` and `update` take the repo as `PATH`, the other commands as `--repo`; both default to the current directory.
+
 `tmpl set KEY=VALUE… [--unit PATH]` is that edit plus the sync in one step. Each key goes to the root, a language present, or the unit that declares it; `--unit` picks one when several units do. Values are checked against the option's type and choices, and live-sourced options (§3.2) are refused: edit their source file instead.
 
-`add`, `remove`, `set` and `feature` take the repo as `--repo` (default: the current directory) and need a manifest with a `version`; on one from `adopt --plan`, edit it and run `tmpl sync` instead.
+`add`, `remove`, `set`, `feature` and `update` need a manifest with a `version`; on one from `adopt --plan`, edit it and run `tmpl sync` instead.
 
 The base is the manifest the last reconcile applied. Every reconcile stamps `applied`, the hash of the manifest's normalized content without that line. When the file still hashes to it, the file is the base. Otherwise it was hand-edited, and sync walks the file's git history, newest first, for the version with that hash; the common case needs no history, so shallow CI clones work. If no commit holds it (a reconcile left uncommitted, then edited again), sync refuses: commit reconciles before editing the manifest.
 
