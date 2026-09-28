@@ -16,11 +16,12 @@ from cyclopts import App, Parameter
 
 from tmpl import __version__, catalog, convert, git, manifest, proc, reconcile, setup
 from tmpl.detect import DetectError, detect
-from tmpl.manifest import Manifest, Unit
+from tmpl.manifest import Manifest, Options, Unit
 from tmpl.merge import Prefer
 from tmpl.render import RenderedFile, RenderError, Tree, render
 
 RENDER_INDEX = ".tmpl-render.json"
+VERSIONLESS = f"{manifest.MANIFEST_PATH} has no version yet (from `adopt --plan`); edit it, then run `tmpl sync`"
 
 app = App(name="tmpl", version=__version__, help="Composable, updatable project templates.")
 
@@ -259,6 +260,94 @@ def sync(path: Path = Path(), *, check: Flag = False, opts: Reconcile | None = N
     return _reconcile(path.resolve(), opts or Reconcile(), check=check)
 
 
+# The first release with `update`; an update to an earlier one runs its `sync`.
+FIRST_UPDATE = (0, 4, 0)
+RELEASE_TAG = re.compile(r"refs/tags/v(\d+)\.(\d+)\.(\d+)")
+
+
+@app.command
+def update(path: Path = Path(), *, to: str | None = None, opts: Reconcile | None = None) -> int:
+    """Move the repo to another tmpl release (default: the latest) and reconcile.
+
+    The target release does the work, so its templates and options apply: options it declares that the manifest
+    lacks are recorded with their defaults, and options it no longer declares are dropped; both are listed.
+
+    Parameters
+    ----------
+    path
+        Repository to update.
+    to
+        Release version, e.g. 0.4.0; defaults to the latest release tag in the manifest's `source`.
+    """
+    repo, opts = path.resolve(), opts or Reconcile()
+    current = manifest.load(repo)
+    if current is None:
+        msg = f"no {manifest.MANIFEST_PATH} in {repo}; use `tmpl adopt`"
+        raise UsageError(msg)
+    if not current.version:
+        raise UsageError(VERSIONLESS)
+    source = current.source or manifest.DEFAULT_SOURCE
+    target = _version(to.removeprefix("v")) if to else _latest_release(repo, source)
+    if target == _version(__version__):
+        return _reconcile(repo, opts, _refresh_options(repo))
+    release = ".".join(map(str, target))
+    command = ["update", "--to", release] if target >= FIRST_UPDATE else ["sync"]
+    flags = [
+        *(["--prefer", opts.prefer] if opts.prefer else []),
+        *(["--dry-run"] if opts.dry_run else []),
+        *(["--allow-dirty"] if opts.allow_dirty else []),
+    ]
+    _out(f"tmpl {__version__}: running tmpl {release}")
+    # `--no-config`: a user `no-build` would refuse the git source.
+    args = ("uvx", "--no-config", "--from", f"{source}@v{release}", "tmpl", *command, str(repo), *flags)
+    return proc.run(*args, capture=False).returncode
+
+
+def _version(text: str) -> tuple[int, ...]:
+    if not re.fullmatch(r"\d+\.\d+\.\d+", text):
+        msg = f"version {text!r}: expected X.Y.Z"
+        raise UsageError(msg)
+    return tuple(int(part) for part in text.split("."))
+
+
+def _latest_release(repo: Path, source: str) -> tuple[int, ...]:
+    refs = git.run(repo, "ls-remote", "--tags", "--refs", source.removeprefix("git+"))
+    found = [tuple(map(int, m.groups())) for m in map(RELEASE_TAG.fullmatch, refs.split()) if m]
+    if not found:
+        msg = f"no release tags (vX.Y.Z) in {source}"
+        raise UsageError(msg)
+    return max(found)
+
+
+def _refresh_options(repo: Path) -> Callable[[Manifest], None]:
+    """Store the options this version declares: new ones at their defaults, undeclared ones dropped (§8.6)."""
+
+    def refresh(where: str, specs: dict[str, catalog.OptionSpec], given: dict[str, object], live: Path) -> Options:
+        stored = catalog.resolve(specs, _picked(given, specs), live).stored
+        for key in sorted(stored.keys() - given.keys()):
+            _out(f"     new  {where} {key} = {stored[key]!r}")
+        for key in sorted(given.keys() - stored.keys()):
+            _out(f" dropped  {where} {key} = {given[key]!r}")
+        return stored
+
+    def change(current: Manifest) -> None:
+        features = current.features
+        root_given = {k: v for k, v in current.root.items() if k != "features"}
+        current.root = refresh("[root]", catalog.options_for(["root"], "root"), root_given, repo)
+        current.features = features
+        for lang in current.langs:
+            specs = catalog.options_for([f"lang/{lang}"], "lang")
+            if stored := refresh(f"[lang.{lang}]", specs, current.lang.get(lang, {}), repo):
+                current.lang[lang] = stored
+            else:
+                current.lang.pop(lang, None)
+        for unit in current.unit:
+            specs = catalog.options_for(catalog.unit_layer_ids(unit.lang, unit.kind), "unit")
+            unit.options = refresh(f"[unit {unit.path}]", specs, unit.options, repo / unit.path)
+
+    return change
+
+
 def _reconcile(
     repo: Path, opts: Reconcile, change: Callable[[Manifest], None] | None = None, *, check: bool = False
 ) -> int:
@@ -270,8 +359,7 @@ def _reconcile(
         raise UsageError(msg)
     applied = _applied(repo, current)
     if change is not None and applied is None:
-        msg = f"{manifest.MANIFEST_PATH} has no version yet (from `adopt --plan`); edit it, then run `tmpl sync`"
-        raise UsageError(msg)
+        raise UsageError(VERSIONLESS)
     # Before any change: `applied` may be `current` itself.
     base = _render_base(applied, repo) if applied else None
     if change is not None:
