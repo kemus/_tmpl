@@ -60,14 +60,14 @@ def detect(repo: Path) -> Detected:
     lang_given = {"python": found.lang_options}
     root_given = _root_options(repo)
     manifest = Manifest(root={}, lang={}, unit=[])
-    manifest.root = catalog.resolve(catalog.options_for(["root"], "root"), root_given, repo).stored
+    manifest.root = catalog.resolve(catalog.root_options([]), root_given, repo).stored
     for lang, given in lang_given.items():
-        specs = catalog.options_for([f"lang/{lang}"], "lang")
+        specs = catalog.lang_options(lang, [])
         stored = catalog.resolve(specs, given, repo).stored
         if stored:
             manifest.lang[lang] = stored
     for unit in found.units:
-        specs = catalog.options_for(catalog.unit_layer_ids(unit.lang, unit.kind), "unit")
+        specs = catalog.unit_options(unit.lang, unit.kind, [])
         manifest.unit.append(
             Unit(unit.path, unit.lang, unit.kind, options=catalog.resolve(specs, {}, repo / unit.path).stored),
         )

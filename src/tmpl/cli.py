@@ -136,14 +136,14 @@ def _new_manifest(repo: Path, units: list[Unit], given: dict[str, object]) -> Ma
         claimed.update(picked)
         return picked
 
-    root_specs = catalog.options_for(["root"], "root")
+    root_specs = catalog.root_options([])
     created = Manifest(root=catalog.resolve(root_specs, take(root_specs), repo).stored)
     for lang in dict.fromkeys(u.lang for u in units):
-        specs = catalog.options_for([f"lang/{lang}"], "lang")
+        specs = catalog.lang_options(lang, [])
         if stored := catalog.resolve(specs, take(specs), repo).stored:
             created.lang[lang] = stored
     for unit in units:
-        specs = catalog.options_for(catalog.unit_layer_ids(unit.lang, unit.kind), "unit")
+        specs = catalog.unit_options(unit.lang, unit.kind, unit.features)
         unit.options = catalog.resolve(specs, take(specs), repo / unit.path).stored
         created.unit.append(unit)
     if unknown := sorted(set(given) - claimed):
@@ -340,17 +340,16 @@ def _refresh_options(repo: Path) -> Callable[[Manifest], None]:
 
     def change(current: Manifest) -> None:
         features = current.features
-        root_given = {k: v for k, v in current.root.items() if k != "features"}
-        current.root = refresh("[root]", catalog.options_for(["root"], "root"), root_given, repo)
+        current.root = refresh("[root]", catalog.root_options(features), current.root_options, repo)
         current.features = features
         for lang in current.langs:
-            specs = catalog.options_for([f"lang/{lang}"], "lang")
+            specs = catalog.lang_options(lang, current.lang_features(lang))
             if stored := refresh(f"[lang.{lang}]", specs, current.lang.get(lang, {}), repo):
                 current.lang[lang] = stored
             else:
                 current.lang.pop(lang, None)
         for unit in current.unit:
-            specs = catalog.options_for(catalog.unit_layer_ids(unit.lang, unit.kind), "unit")
+            specs = catalog.unit_options(unit.lang, unit.kind, unit.features)
             unit.options = refresh(f"[unit {unit.path}]", specs, unit.options, repo / unit.path)
 
     return change
@@ -402,9 +401,9 @@ def add(spec: str, *, opt: list[str] | None = None, repo: Path = Path(), opts: R
     def change(current: Manifest) -> None:
         if other := manifest.overlap(unit.path, [u.path for u in current.unit]):
             raise UsageError(_overlap_text(unit.path, other))
-        unit_specs = catalog.options_for(catalog.unit_layer_ids(unit.lang, unit.kind), "unit")
+        unit_specs = catalog.unit_options(unit.lang, unit.kind, unit.features)
         new_lang = unit.lang not in current.langs
-        lang_specs = catalog.options_for([f"lang/{unit.lang}"], "lang") if new_lang else {}
+        lang_specs = catalog.lang_options(unit.lang, current.features) if new_lang else {}
         if unknown := sorted(set(given) - set(unit_specs) - set(lang_specs)):
             hint = "" if new_lang else f"; set {unit.lang} options with `tmpl set`"
             msg = f"unknown options for this unit: {unknown}{hint}"
@@ -432,13 +431,17 @@ def remove(path: str, *, repo: Path = Path(), opts: Reconcile | None = None) -> 
         Repository to change.
     """
 
+    root = repo.resolve()
+
     def change(current: Manifest) -> None:
         unit = _find_unit(current, path)
         current.unit.remove(unit)
         if unit.lang not in current.langs:
             current.lang.pop(unit.lang, None)
+        # Language options its features declared go with them.
+        _refresh_options(root)(current)
 
-    return _reconcile(repo.resolve(), opts or Reconcile(), change)
+    return _reconcile(root, opts or Reconcile(), change)
 
 
 @app.command(name="set")
@@ -472,8 +475,15 @@ app.command(feature_app)
 
 
 @feature_app.command(name="add")
-def feature_add(feature: str, path: str | None = None, *, repo: Path = Path(), opts: Reconcile | None = None) -> int:
-    """Attach FEATURE to the root, or to the unit at PATH, and reconcile.
+def feature_add(
+    feature: str,
+    path: str | None = None,
+    *,
+    opt: list[str] | None = None,
+    repo: Path = Path(),
+    opts: Reconcile | None = None,
+) -> int:
+    """Attach FEATURE to the root, or to the unit at PATH, and reconcile; its options not given take their defaults.
 
     Parameters
     ----------
@@ -481,9 +491,13 @@ def feature_add(feature: str, path: str | None = None, *, repo: Path = Path(), o
         Feature name; unknown names list the features this version ships.
     path
         Unit path relative to the repo root; omit for a root feature.
+    opt
+        KEY=VALUE for an option the feature declares; repeatable.
     repo
         Repository to change.
     """
+    root = repo.resolve()
+    given = _parse_opts(opt or [])
 
     def change(current: Manifest) -> None:
         unit = _find_unit(current, path) if path is not None else None
@@ -498,8 +512,10 @@ def feature_add(feature: str, path: str | None = None, *, repo: Path = Path(), o
             unit.features.append(feature)
         else:
             current.features = [*attached, feature]
+        _set_feature_options(current, feature, unit, given)
+        _refresh_options(root)(current)
 
-    return _reconcile(repo.resolve(), opts or Reconcile(), change)
+    return _reconcile(root, opts or Reconcile(), change)
 
 
 @feature_app.command(name="remove")
@@ -518,6 +534,7 @@ def feature_remove(feature: str, path: str | None = None, *, repo: Path = Path()
     repo
         Repository to change.
     """
+    root = repo.resolve()
 
     def change(current: Manifest) -> None:
         unit = _find_unit(current, path) if path is not None else None
@@ -529,12 +546,37 @@ def feature_remove(feature: str, path: str | None = None, *, repo: Path = Path()
             unit.features.remove(feature)
         else:
             current.features = [f for f in attached if f != feature]
+        _refresh_options(root)(current)
 
-    return _reconcile(repo.resolve(), opts or Reconcile(), change)
+    return _reconcile(root, opts or Reconcile(), change)
 
 
 def _where(unit: Unit | None) -> str:
     return f"the unit at {unit.path}" if unit else "the root"
+
+
+def _set_feature_options(current: Manifest, feature: str, unit: Unit | None, given: dict[str, object]) -> None:
+    """Store each of `given` in the table of the scope that declares it among `feature`'s layers."""
+    langs = [unit.lang] if unit else current.langs
+    scopes: list[tuple[Callable[[], Options], dict[str, catalog.OptionSpec]]] = [
+        (partial(getattr, unit, "options"), catalog.options_for(catalog.feature_layer_ids(feature, unit.lang), "unit"))
+        if unit
+        else (lambda: current.root, catalog.options_for([f"feature/{feature}"], "root")),
+    ]
+    scopes += [
+        (partial(current.lang.setdefault, lang, {}), catalog.options_for([f"lang/{lang}/feature/{feature}"], "lang"))
+        for lang in langs
+    ]
+    for key, value in given.items():
+        found = [(table, spec) for table, specs in scopes if (spec := specs.get(key))]
+        if not found:
+            msg = f"option {key!r}: not declared by feature {feature!r}"
+            raise UsageError(msg)
+        table, spec = found[0]
+        if spec.source:
+            msg = f"option {key!r} is read from {spec.source}; edit that instead"
+            raise UsageError(msg)
+        table()[key] = spec.coerce(key, value)
 
 
 def _picked(given: dict[str, object], specs: dict[str, catalog.OptionSpec]) -> dict[str, object]:
@@ -546,16 +588,13 @@ def _option_table(current: Manifest, key: str, unit: str | None) -> tuple[dict[s
     # Each scope's table is fetched only once the key matches, so a language gains no empty table.
     scopes: list[tuple[Callable[[], dict[str, object]], dict[str, catalog.OptionSpec]]] = []
     if unit is None:
-        scopes.append((lambda: current.root, catalog.options_for(["root"], "root")))
+        scopes.append((lambda: current.root, catalog.root_options(current.features)))
         scopes += [
-            (partial(current.lang.setdefault, lang, {}), catalog.options_for([f"lang/{lang}"], "lang"))
+            (partial(current.lang.setdefault, lang, {}), catalog.lang_options(lang, current.lang_features(lang)))
             for lang in current.langs
         ]
     units = current.unit if unit is None else [_find_unit(current, unit)]
-    scopes += [
-        (partial(getattr, u, "options"), catalog.options_for(catalog.unit_layer_ids(u.lang, u.kind), "unit"))
-        for u in units
-    ]
+    scopes += [(partial(getattr, u, "options"), catalog.unit_options(u.lang, u.kind, u.features)) for u in units]
     found = [(table, spec) for table, specs in scopes if (spec := specs.get(key))]
     if not found:
         where = f"the unit at {_unit_path(unit)}" if unit is not None else "this repo's layers"

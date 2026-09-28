@@ -178,6 +178,22 @@ def options_for(layer_ids: list[str], scope: Scope) -> dict[str, OptionSpec]:
     return specs
 
 
+def root_options(features: list[str]) -> dict[str, OptionSpec]:
+    """Root options: the root layer's and those of the root's `features`."""
+    return options_for(["root", *(f"feature/{f}" for f in features)], "root")
+
+
+def lang_options(lang: str, features: list[str]) -> dict[str, OptionSpec]:
+    """`lang` options: its layer's and those of `features`, the root's and its units' (`Manifest.lang_features`)."""
+    return options_for([f"lang/{lang}", *(f"lang/{lang}/feature/{f}" for f in features)], "lang")
+
+
+def unit_options(lang: str, kind: str, features: list[str]) -> dict[str, OptionSpec]:
+    """Options of a `lang`/`kind` unit with `features` attached."""
+    feature_ids = [layer_id for f in features for layer_id in feature_layer_ids(f, lang)]
+    return options_for([*unit_layer_ids(lang, kind), *feature_ids], "unit")
+
+
 @attrs.define
 class Resolved:
     """Option values for rendering, split into what the manifest stores and what was read live."""

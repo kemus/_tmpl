@@ -63,8 +63,8 @@ def slug(name: str) -> str:
 
 
 def instances(manifest: Manifest, repo_name: str, live_root: Path | None) -> list[Instance]:
-    root_given = {k: v for k, v in manifest.root.items() if k != "features"}
-    root_values = catalog.resolve(catalog.options_for(["root"], "root"), root_given, live_root).values
+    root_features = manifest.features
+    root_values = catalog.resolve(catalog.root_options(root_features), manifest.root_options, live_root).values
     root_ctx = {"repo_name": repo_name, "tmpl_spec": manifest.spec, **root_values}
     out: list[Instance] = []
 
@@ -74,7 +74,6 @@ def instances(manifest: Manifest, repo_name: str, live_root: Path | None) -> lis
             out.append(Instance(found, placement, {**ctx, **found.spec.vars}))
 
     add("root", ".", root_ctx)
-    root_features = manifest.features
     for layer_id in _feature_layer_ids(root_features):
         add(layer_id, ".", root_ctx)
     lang_ctx: dict[str, dict[str, object]] = {}
@@ -85,7 +84,7 @@ def instances(manifest: Manifest, repo_name: str, live_root: Path | None) -> lis
         # Live lang options are read at the first unit of that language.
         first = next(u for u in manifest.unit if u.lang == lang)
         live = live_root / first.path if live_root else None
-        specs = catalog.options_for([f"lang/{lang}"], "lang")
+        specs = catalog.lang_options(lang, manifest.lang_features(lang))
         lang_ctx[lang] = {**root_ctx, **catalog.resolve(specs, manifest.lang.get(lang, {}), live).values}
         add(f"lang/{lang}", ".", lang_ctx[lang])
         for feature in root_features:
@@ -96,7 +95,8 @@ def instances(manifest: Manifest, repo_name: str, live_root: Path | None) -> lis
             raise RenderError(msg)
         layer_ids = catalog.unit_layer_ids(unit.lang, unit.kind)
         live = live_root / unit.path if live_root else None
-        values = catalog.resolve(catalog.options_for(layer_ids, "unit"), unit.options, live).values
+        specs = catalog.unit_options(unit.lang, unit.kind, unit.features)
+        values = catalog.resolve(specs, unit.options, live).values
         name = str(values.get("name") or default_name(unit, repo_name))
         info = {"path": unit.path, "lang": unit.lang, "kind": unit.kind, "name": name, "slug": slug(name)}
         ctx = {**lang_ctx[unit.lang], **values, "unit": info}

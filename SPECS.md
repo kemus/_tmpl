@@ -189,6 +189,8 @@ Go/rust github-action units expect the `release` feature on the unit, because th
 
 A feature is attached to the root or to a unit (`tmpl feature add release crates/foo`) and follows the same reconcile rules as units. It contributes files and fragments through `feature/<f>/` plus `lang/<lang>/feature/<f>/`. Applicability is validated just like the kind × lang matrix. `feature/<f>/template.toml` declares the feature with `attaches` (`root` or `unit`) and, for a unit feature, `kinds` (all when unset). A unit feature needs `lang/<lang>/feature/<f>/` for the unit's language. A root feature also applies `lang/<lang>/feature/<f>/` for each language present, at the root.
 
+A feature's layers declare options like any layer (§3.4). `root` options come from a root feature's `feature/<f>`, `unit` options from a unit feature's two layers, and `lang` options from `lang/<lang>/feature/<f>` of any feature attached to the root or to a unit of that language. They are stored with the other options of their scope.
+
 Shipped so far: `deps-update` (Renovate). The rest of the table is planned.
 
 | Feature | Attaches to | Contributes (per language where relevant) |
@@ -339,6 +341,8 @@ Removes the unit from the manifest and reconciles:
 ### 8.5 `tmpl feature add|remove FEATURE [PATH]`
 
 Attaches a feature to or detaches it from the root (no `PATH`) or the unit at `PATH`, checked against §4.3, and reconciles. Root features are stored in `[root] features`, unit features in the unit's `features`. Adding one already attached, or removing one that isn't, is refused. Removal follows the same rules as §8.4. Removing a unit also removes its features.
+
+`feature add --opt KEY=VALUE` sets an option the feature declares. Its other options are stored with their defaults. Removing a feature, or the unit it's attached to, drops the options only it declared. Both print each change, as `update` does (§8.6).
 
 ### 8.6 `tmpl update [PATH] [--to VERSION]`
 

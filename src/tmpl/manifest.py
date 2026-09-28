@@ -71,6 +71,16 @@ class Manifest:
         """Languages present, in first-unit order."""
         return list(dict.fromkeys(u.lang for u in self.unit))
 
+    @property
+    def root_options(self) -> Options:
+        """The root options, without the `features` list stored among them."""
+        return {k: v for k, v in self.root.items() if k != "features"}
+
+    def lang_features(self, lang: str) -> list[str]:
+        """Features whose `lang` layer applies: the root's, then those of the units of `lang`."""
+        unit_features = (f for u in self.unit if u.lang == lang for f in u.features)
+        return list(dict.fromkeys([*self.features, *unit_features]))
+
 
 def overlap(path: str, others: list[str]) -> str | None:
     """The first of `others` that is `path`, contains it, or lies inside it (§8.3).
