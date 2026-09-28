@@ -1,0 +1,3 @@
+# Dependency updates via Renovate: language deps, mise tools (`.config/mise/config.toml`), and pinned action SHAs.
+
+attaches = "root"

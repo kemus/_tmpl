@@ -74,6 +74,9 @@ def instances(manifest: Manifest, repo_name: str, live_root: Path | None) -> lis
             out.append(Instance(found, placement, {**ctx, **found.spec.vars}))
 
     add("root", ".", root_ctx)
+    root_features = manifest.features
+    for layer_id in _feature_layer_ids(root_features):
+        add(layer_id, ".", root_ctx)
     lang_ctx: dict[str, dict[str, object]] = {}
     for lang in manifest.langs:
         if catalog.layer(f"lang/{lang}") is None:
@@ -85,6 +88,8 @@ def instances(manifest: Manifest, repo_name: str, live_root: Path | None) -> lis
         specs = catalog.options_for([f"lang/{lang}"], "lang")
         lang_ctx[lang] = {**root_ctx, **catalog.resolve(specs, manifest.lang.get(lang, {}), live).values}
         add(f"lang/{lang}", ".", lang_ctx[lang])
+        for feature in root_features:
+            add(f"lang/{lang}/feature/{feature}", ".", lang_ctx[lang])
     for unit in manifest.unit:
         if not catalog.supported(unit.lang, unit.kind):
             msg = f"unsupported unit {unit.lang}/{unit.kind} at {unit.path}"
@@ -95,9 +100,21 @@ def instances(manifest: Manifest, repo_name: str, live_root: Path | None) -> lis
         name = str(values.get("name") or default_name(unit, repo_name))
         info = {"path": unit.path, "lang": unit.lang, "kind": unit.kind, "name": name, "slug": slug(name)}
         ctx = {**lang_ctx[unit.lang], **values, "unit": info}
-        for layer_id in layer_ids:
+        for layer_id in [*layer_ids, *_feature_layer_ids(unit.features, unit)]:
             add(layer_id, unit.path, ctx)
     return out
+
+
+def _feature_layer_ids(features: list[str], unit: Unit | None = None) -> list[str]:
+    """Layers of the features attached to the root, or to `unit`, after checking each can attach there."""
+    ids: list[str] = []
+    for feature in features:
+        problem = catalog.feature_problem(feature, unit.lang, unit.kind) if unit else catalog.feature_problem(feature)
+        if problem:
+            msg = f"unit at {unit.path}: {problem}" if unit else problem
+            raise RenderError(msg)
+        ids += catalog.feature_layer_ids(feature, unit.lang) if unit else [f"feature/{feature}"]
+    return ids
 
 
 def _env(layer: Layer) -> jinja2.Environment:

@@ -372,6 +372,76 @@ def set_cmd(*pairs: str, unit: str | None = None, repo: Path = Path(), opts: Rec
     return _reconcile(repo.resolve(), opts or Reconcile(), change)
 
 
+feature_app = App(name="feature", help="Attach features to the root or a unit, or detach them.")
+app.command(feature_app)
+
+
+@feature_app.command(name="add")
+def feature_add(feature: str, path: str | None = None, *, repo: Path = Path(), opts: Reconcile | None = None) -> int:
+    """Attach FEATURE to the root, or to the unit at PATH, and reconcile.
+
+    Parameters
+    ----------
+    feature
+        Feature name; unknown names list the features this version ships.
+    path
+        Unit path relative to the repo root; omit for a root feature.
+    repo
+        Repository to change.
+    """
+
+    def change(current: Manifest) -> None:
+        unit = _find_unit(current, path) if path is not None else None
+        problem = catalog.feature_problem(feature, unit.lang, unit.kind) if unit else catalog.feature_problem(feature)
+        if problem:
+            raise UsageError(problem)
+        attached = unit.features if unit else current.features
+        if feature in attached:
+            msg = f"feature {feature!r} is already attached to {_where(unit)}"
+            raise UsageError(msg)
+        if unit:
+            unit.features.append(feature)
+        else:
+            current.features = [*attached, feature]
+
+    return _reconcile(repo.resolve(), opts or Reconcile(), change)
+
+
+@feature_app.command(name="remove")
+def feature_remove(feature: str, path: str | None = None, *, repo: Path = Path(), opts: Reconcile | None = None) -> int:
+    """Detach FEATURE from the root, or from the unit at PATH, and reconcile.
+
+    Its files are deleted only if unchanged from the last reconcile; modified ones are kept and listed, and the
+    command exits 1.
+
+    Parameters
+    ----------
+    feature
+        Feature name.
+    path
+        Unit path relative to the repo root; omit for a root feature.
+    repo
+        Repository to change.
+    """
+
+    def change(current: Manifest) -> None:
+        unit = _find_unit(current, path) if path is not None else None
+        attached = unit.features if unit else current.features
+        if feature not in attached:
+            msg = f"feature {feature!r} is not attached to {_where(unit)}; attached: {', '.join(attached) or 'none'}"
+            raise UsageError(msg)
+        if unit:
+            unit.features.remove(feature)
+        else:
+            current.features = [f for f in attached if f != feature]
+
+    return _reconcile(repo.resolve(), opts or Reconcile(), change)
+
+
+def _where(unit: Unit | None) -> str:
+    return f"the unit at {unit.path}" if unit else "the root"
+
+
 def _picked(given: dict[str, object], specs: dict[str, catalog.OptionSpec]) -> dict[str, object]:
     return {k: v for k, v in given.items() if k in specs}
 

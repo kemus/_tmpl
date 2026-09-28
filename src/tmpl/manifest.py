@@ -12,6 +12,7 @@ import tomlkit
 from tomlkit.items import AoT
 
 from tmpl.convert import structure
+from tmpl.docs import is_seq
 
 if TYPE_CHECKING:
     from tomlkit.items import Table
@@ -48,6 +49,22 @@ class Manifest:
     def spec(self) -> str:
         """The `uvx --from` requirement for the tmpl release that reconciled this manifest."""
         return f"{self.source or DEFAULT_SOURCE}@v{self.version}"
+
+    @property
+    def features(self) -> list[str]:
+        """Features attached to the root, kept with the root options (§3.3)."""
+        value = self.root.get("features", [])
+        if not is_seq(value) or not all(isinstance(f, str) for f in value):
+            msg = f"root.features: expected a list of feature names, got {value!r}"
+            raise ValueError(msg)
+        return [str(f) for f in value]
+
+    @features.setter
+    def features(self, value: list[str]) -> None:
+        if value:
+            self.root["features"] = value
+        else:
+            self.root.pop("features", None)
 
     @property
     def langs(self) -> list[str]:
