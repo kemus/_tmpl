@@ -326,7 +326,7 @@ Every mutating command refuses to run on a dirty worktree (`--allow-dirty` overr
 
 ### 8.3 `tmpl add LANG:KIND[@PATH]`
 
-Adds a unit (checked against the matrix and against existing units at the same path) and reconciles. Unit options, and the language's options when the unit brings a new language, come from `--opt KEY=VALUE` or their defaults. Adding the first unit of a new language also pulls in that language's layer. Adding a second unit (or one off `.`) creates the workspace root.
+Adds a unit (checked against the matrix and against existing units) and reconciles. Units never nest: a unit's path may not equal, contain, or lie inside another unit's path, since a package would enclose another's tree and workspace. The root unit `.` is the exception, as the workspace root sits above every member. `init` and `adopt` refuse nested units the same way. Unit options, and the language's options when the unit brings a new language, come from `--opt KEY=VALUE` or their defaults. Adding the first unit of a new language also pulls in that language's layer. Adding a second unit (or one off `.`) creates the workspace root.
 
 ### 8.4 `tmpl remove PATH`
 

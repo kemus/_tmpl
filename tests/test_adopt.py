@@ -6,8 +6,9 @@ import pytest
 
 from tmpl import manifest
 from tmpl.cli import app
+from tmpl.detect import DetectError, detect
 
-from .conftest import commit_all, git
+from .conftest import commit_all, git, write
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -84,3 +85,19 @@ def test_adopt_refuses_dirty_tree(repo: Path) -> None:
     (repo / "README.md").write_text("changed\n")
     with pytest.raises(Exception, match="uncommitted changes"):
         run("adopt", str(repo), "--yes")
+
+
+def test_detect_refuses_nested_units(tmp_path: Path) -> None:
+    package = (
+        '[project]\nname = "{name}"\n\n[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n'
+    )
+    write(
+        tmp_path,
+        {
+            "pyproject.toml": '[tool.uv.workspace]\nmembers = ["apps", "apps/tool"]\n',
+            "apps/pyproject.toml": package.format(name="apps"),
+            "apps/tool/pyproject.toml": package.format(name="tool"),
+        },
+    )
+    with pytest.raises(DetectError, match="detected units at apps and apps/tool, which nest"):
+        detect(tmp_path)

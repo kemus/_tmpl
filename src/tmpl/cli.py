@@ -99,6 +99,14 @@ def _unit_path(path: str) -> str:
     return path.strip().strip("/") or "."
 
 
+def _overlap_text(path: str, other: str) -> str:
+    if path == other:
+        return f"a unit already lives at {path}"
+    return (
+        f"a unit at {path} would nest with the unit at {other}; units can't contain one another, except the root unit"
+    )
+
+
 def _find_unit(current: Manifest, path: str) -> Unit:
     path = _unit_path(path)
     for unit in current.unit:
@@ -174,9 +182,9 @@ def init(
         msg = "no units given"
         raise UsageError(msg)
     units = [_parse_unit(spec) for spec in specs]
-    if len({u.path for u in units}) != len(units):
-        msg = "two units share a path"
-        raise UsageError(msg)
+    for index, parsed in enumerate(units):
+        if other := manifest.overlap(parsed.path, [u.path for u in units[:index]]):
+            raise UsageError(_overlap_text(parsed.path, other))
     given = _parse_opts(opt or [])
     created = _new_manifest(repo, units, given)
     created.version = __version__
@@ -392,9 +400,8 @@ def add(spec: str, *, opt: list[str] | None = None, repo: Path = Path(), opts: R
     given = _parse_opts(opt or [])
 
     def change(current: Manifest) -> None:
-        if any(u.path == unit.path for u in current.unit):
-            msg = f"a unit already lives at {unit.path}"
-            raise UsageError(msg)
+        if other := manifest.overlap(unit.path, [u.path for u in current.unit]):
+            raise UsageError(_overlap_text(unit.path, other))
         unit_specs = catalog.options_for(catalog.unit_layer_ids(unit.lang, unit.kind), "unit")
         new_lang = unit.lang not in current.langs
         lang_specs = catalog.options_for([f"lang/{unit.lang}"], "lang") if new_lang else {}

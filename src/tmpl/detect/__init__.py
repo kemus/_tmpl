@@ -10,7 +10,7 @@ import attrs
 from tmpl import catalog, git
 from tmpl.detect import python
 from tmpl.docs import is_map, is_seq
-from tmpl.manifest import Manifest, Options, Unit
+from tmpl.manifest import Manifest, Options, Unit, overlap
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -45,9 +45,12 @@ def detect(repo: Path) -> Detected:
         msg = "no supported units found (this version detects python projects only)"
         raise DetectError("; ".join([msg, *found.warnings]))
     warnings = list(found.warnings)
-    for unit in found.units:
+    for index, unit in enumerate(found.units):
         if not catalog.supported(unit.lang, unit.kind):
             msg = f"detected {unit.lang}/{unit.kind} at {unit.path}, which this version cannot render yet"
+            raise DetectError(msg)
+        if other := overlap(unit.path, [u.path for u in found.units[:index]]):
+            msg = f"detected units at {other} and {unit.path}, which nest; tmpl units can't contain one another"
             raise DetectError(msg)
     foreign = [p for p in FOREIGN_CONFIG if (repo / p).exists()]
     warnings += [f"existing {p}: tmpl manages its own copy; fold it in by hand" for p in foreign]

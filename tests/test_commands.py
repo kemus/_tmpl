@@ -104,6 +104,36 @@ def test_add_refuses_a_taken_path_and_foreign_options(tmp_path: Path) -> None:
         run("add", "python:cli@apps/tool", "--opt", "type_checker_fast=ty", "--repo", str(repo))
 
 
+@pytest.mark.parametrize("spec", ["python:lib@apps", "python:scripts@apps/tool/scripts"])
+def test_add_refuses_nested_units(spec: str, tmp_path: Path) -> None:
+    repo = new_repo(tmp_path, "python:lib", "python:cli@apps/tool")
+    with pytest.raises(UsageError, match="would nest with the unit at apps/tool; units can't contain one another"):
+        run("add", spec, "--repo", str(repo))
+    assert run("add", "python:cli@apps/tool2", "--repo", str(repo)) == 0
+
+
+def test_init_refuses_nested_units(tmp_path: Path) -> None:
+    with pytest.raises(UsageError, match="a unit at apps/tool would nest with the unit at apps"):
+        run("init", str(tmp_path / "x"), "--unit=python:lib@apps", "--unit=python:cli@apps/tool", "--no-setup")
+    with pytest.raises(UsageError, match=r"a unit already lives at \.$"):
+        run("init", str(tmp_path / "x"), "--unit=python:lib", "--unit=python:cli", "--no-setup")
+    assert not (tmp_path / "x").exists()
+
+
+@pytest.mark.parametrize(
+    ("path", "others", "found"),
+    [
+        ("apps", ["apps/tool"], "apps/tool"),
+        ("apps/tool/sub", [".", "apps/tool"], "apps/tool"),
+        ("apps/tool", ["apps/tool2", "."], None),
+        (".", ["apps"], None),
+        (".", ["apps", "."], "."),
+    ],
+)
+def test_overlap(path: str, others: list[str], found: str | None) -> None:
+    assert manifest.overlap(path, others) == found
+
+
 def test_add_takes_unit_options(tmp_path: Path) -> None:
     repo = new_repo(tmp_path, "python:lib")
     assert run("add", "python:scripts@scripts", "--opt", "importable=true", "--repo", str(repo)) == 0

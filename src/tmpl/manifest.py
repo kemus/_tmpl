@@ -72,6 +72,19 @@ class Manifest:
         return list(dict.fromkeys(u.lang for u in self.unit))
 
 
+def overlap(path: str, others: list[str]) -> str | None:
+    """The first of `others` that is `path`, contains it, or lies inside it (§8.3).
+
+    Units never nest: a package would enclose another's tree and workspace. The root unit `.` is the exception,
+    since the workspace root sits above every member.
+    """
+    for other in others:
+        inside = f"{path}/".startswith(f"{other}/") or f"{other}/".startswith(f"{path}/")
+        if other == path or (inside and "." not in (path, other)):
+            return other
+    return None
+
+
 def loads(text: str) -> Manifest:
     return structure(tomllib.loads(text), Manifest)
 
