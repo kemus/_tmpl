@@ -187,14 +187,16 @@ Go/rust github-action units expect the `release` feature on the unit, because th
 
 ### 4.3 Features (cross-cutting add-ons)
 
-A feature is attached to the root or to a unit (`tmpl feature add release crates/foo`) and follows the same reconcile rules as units. It contributes files and fragments through `feature/<f>/` plus `lang/<lang>/feature/<f>/`. Applicability is validated just like the kind × lang matrix.
+A feature is attached to the root or to a unit (`tmpl feature add release crates/foo`) and follows the same reconcile rules as units. It contributes files and fragments through `feature/<f>/` plus `lang/<lang>/feature/<f>/`. Applicability is validated just like the kind × lang matrix. `feature/<f>/template.toml` declares the feature with `attaches` (`root` or `unit`) and, for a unit feature, `kinds` (all when unset). A unit feature needs `lang/<lang>/feature/<f>/` for the unit's language. A root feature also applies `lang/<lang>/feature/<f>/` for each language present, at the root.
+
+Shipped so far: `deps-update` (Renovate). The rest of the table is planned.
 
 | Feature | Attaches to | Contributes (per language where relevant) |
 |---|---|---|
 | `release` | unit | publish workflow: PyPI (trusted publishing), crates.io (libs) + cargo-dist (binaries, installers, GitHub releases), goreleaser, npm, luarocks, GitHub release tarball for shell; changelog via git-cliff |
 | `container` | unit (service, cli, mcp-server, tui) | multi-stage Dockerfile with digest-pinned bases: distroless (static/cc) for go/rust, python-slim + uv for python, node-slim for ts; CI image build/push job |
 | `docs` | root | docs site chosen by languages present (mkdocs-material if python, else vitepress if ts, else mdbook if rust; overridable), plus a CI build/deploy job |
-| `deps-update` | root | Renovate (default) · Dependabot config covering language deps, mise tools, and pinned action SHAs |
+| `deps-update` | root | Renovate config (`.github/renovate.json`) covering language deps, mise tools, and pinned action SHAs |
 | `coverage` | unit | coverage.py, cargo-llvm-cov, `go test -cover`, vitest coverage; report in the CI job summary + artifact, optional failing threshold; no third-party service |
 | `bench` | unit | pytest-benchmark, divan, `go test -bench`, vitest bench; `bench:<lang>` mise task |
 | `fuzz` | unit | atheris, cargo-fuzz, go native fuzzing, Jazzer.js; `fuzz:<lang>` mise task |
@@ -336,7 +338,7 @@ Removes the unit from the manifest and reconciles:
 
 ### 8.5 `tmpl feature add|remove FEATURE [PATH]`
 
-Attaches a feature to or detaches it from the root (no `PATH`) or the unit at `PATH`, checked against §4.3. Removal follows the same rules as §8.4. Removing a unit also removes its features.
+Attaches a feature to or detaches it from the root (no `PATH`) or the unit at `PATH`, checked against §4.3, and reconciles. Root features are stored in `[root] features`, unit features in the unit's `features`. Adding one already attached, or removing one that isn't, is refused. Removal follows the same rules as §8.4. Removing a unit also removes its features.
 
 ### 8.6 `tmpl update [--to VERSION]`
 
@@ -348,7 +350,7 @@ Reconciles the current manifest at the current version, e.g. after a hand edit o
 
 `tmpl set KEY=VALUE… [--unit PATH]` is that edit plus the sync in one step. Each key goes to the root, a language present, or the unit that declares it; `--unit` picks one when several units do. Values are checked against the option's type and choices, and live-sourced options (§3.2) are refused: edit their source file instead.
 
-`add`, `remove` and `set` take the repo as `--repo` (default: the current directory) and need a manifest with a `version`; on one from `adopt --plan`, edit it and run `tmpl sync` instead.
+`add`, `remove`, `set` and `feature` take the repo as `--repo` (default: the current directory) and need a manifest with a `version`; on one from `adopt --plan`, edit it and run `tmpl sync` instead.
 
 The base is the manifest the last reconcile applied. Every reconcile stamps `applied`, the hash of the manifest's normalized content without that line. When the file still hashes to it, the file is the base. Otherwise it was hand-edited, and sync walks the file's git history, newest first, for the version with that hash; the common case needs no history, so shallow CI clones work. If no commit holds it (a reconcile left uncommitted, then edited again), sync refuses: commit reconciles before editing the manifest.
 
@@ -464,6 +466,11 @@ data = { project = { dependencies = ["cyclopts"], scripts = { "{{ unit.name }}" 
 ```toml
 # templates/lang/python/kind/scripts/template.toml
 package = false                 # not a package: skip lang/python/unit (§2.2)
+```
+
+```toml
+# templates/feature/deps-update/template.toml
+attaches = "root"               # declares a feature (§4.3); a unit feature may add `kinds = ["cli", …]`
 ```
 
 Data values render as Jinja strings; a value that renders to `""` is dropped, which is how optional keys (like `builtin` above) disappear.

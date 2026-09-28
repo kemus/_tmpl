@@ -17,6 +17,7 @@ from tmpl.docs import is_map
 TEMPLATES = Path(__file__).parent / "templates"
 
 type Scope = Literal["root", "lang", "unit"]
+type Attach = Literal["root", "unit"]
 type Policy = Literal["merge", "seed"]
 type SetKey = Literal["exact", "requirement"]
 
@@ -88,6 +89,10 @@ class LayerSpec:
     # On a lang-by-kind layer: false for kinds that are not packages (scripts). They skip the
     # language's unit layer, and with it the manifest file and workspace membership.
     package: bool = True
+    # On a `feature/<f>` layer, which declares the feature: where it attaches, and for a unit feature the kinds it
+    # suits (all when unset). A unit feature needs `lang/<lang>/feature/<f>` for the unit's language (§4.3).
+    attaches: Attach | None = None
+    kinds: list[str] | None = None
 
 
 @attrs.frozen
@@ -125,6 +130,33 @@ def unit_layer_ids(lang: str, kind: str) -> list[str]:
 
 def supported(lang: str, kind: str) -> bool:
     return layer(f"lang/{lang}/kind/{kind}") is not None
+
+
+def features() -> list[str]:
+    directory = TEMPLATES / "feature"
+    names = sorted(p.name for p in directory.iterdir()) if directory.is_dir() else []
+    return [name for name in names if (found := layer(f"feature/{name}")) and found.spec.attaches]
+
+
+def feature_layer_ids(feature: str, lang: str) -> list[str]:
+    return [f"feature/{feature}", f"lang/{lang}/feature/{feature}"]
+
+
+def feature_problem(feature: str, lang: str | None = None, kind: str | None = None) -> str | None:
+    """Why `feature` can't attach to the root (no `lang`) or to a `lang`/`kind` unit; None if it can."""
+    declared = layer(f"feature/{feature}")
+    if declared is None or declared.spec.attaches is None:
+        return f"unknown feature {feature!r}; features: {', '.join(features()) or 'none'}"
+    attaches, kinds = declared.spec.attaches, declared.spec.kinds
+    if attaches != ("root" if lang is None else "unit"):
+        return f"feature {feature!r} attaches to {'the root' if attaches == 'root' else 'a unit (pass its PATH)'}"
+    if lang is None:
+        return None
+    if kinds is not None and kind not in kinds:
+        return f"feature {feature!r} suits {', '.join(kinds)} units, not {kind}"
+    if layer(f"lang/{lang}/feature/{feature}") is None:
+        return f"feature {feature!r} has no {lang} support in this version"
+    return None
 
 
 def merge_rules() -> dict[str, MergeRule]:
