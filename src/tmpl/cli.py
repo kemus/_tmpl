@@ -297,7 +297,8 @@ def update(path: Path = Path(), *, to: str | None = None, opts: Reconcile | None
     source = current.source or manifest.DEFAULT_SOURCE
     target = _version(to.removeprefix("v")) if to else _latest_release(repo, source)
     if target == _version(__version__):
-        return _reconcile(repo, opts, _refresh_options(repo))
+        # No change of its own: the reconcile's option refresh is the update.
+        return _reconcile(repo, opts, lambda _: None, downgrade=True)
     release = ".".join(map(str, target))
     command = ["update", "--to", release] if target >= FIRST_UPDATE else ["sync"]
     flags = [
@@ -327,7 +328,7 @@ def _latest_release(repo: Path, source: str) -> tuple[int, ...]:
     return max(found)
 
 
-def _refresh_options(repo: Path) -> Callable[[Manifest], None]:
+def _refresh_options(repo: Path, current: Manifest) -> None:
     """Store the options this version declares: new ones at their defaults, undeclared ones dropped (§8.6)."""
 
     def refresh(where: str, specs: dict[str, catalog.OptionSpec], given: dict[str, object], live: Path) -> Options:
@@ -338,31 +339,43 @@ def _refresh_options(repo: Path) -> Callable[[Manifest], None]:
             _out(f" dropped  {where} {key} = {given[key]!r}")
         return stored
 
-    def change(current: Manifest) -> None:
-        features = current.features
-        current.root = refresh("[root]", catalog.root_options(features), current.root_options, repo)
-        current.features = features
-        for lang in current.langs:
-            specs = catalog.lang_options(lang, current.lang_features(lang))
-            if stored := refresh(f"[lang.{lang}]", specs, current.lang.get(lang, {}), repo):
-                current.lang[lang] = stored
-            else:
-                current.lang.pop(lang, None)
-        for unit in current.unit:
-            specs = catalog.unit_options(unit.lang, unit.kind, unit.features)
-            unit.options = refresh(f"[unit {unit.path}]", specs, unit.options, repo / unit.path)
-
-    return change
+    features = current.features
+    current.root = refresh("[root]", catalog.root_options(features), current.root_options, repo)
+    current.features = features
+    for lang in current.langs:
+        specs = catalog.lang_options(lang, current.lang_features(lang))
+        if stored := refresh(f"[lang.{lang}]", specs, current.lang.get(lang, {}), repo):
+            current.lang[lang] = stored
+        else:
+            current.lang.pop(lang, None)
+    for unit in current.unit:
+        specs = catalog.unit_options(unit.lang, unit.kind, unit.features)
+        unit.options = refresh(f"[unit {unit.path}]", specs, unit.options, repo / unit.path)
 
 
 def _reconcile(
-    repo: Path, opts: Reconcile, change: Callable[[Manifest], None] | None = None, *, check: bool = False
+    repo: Path,
+    opts: Reconcile,
+    change: Callable[[Manifest], None] | None = None,
+    *,
+    check: bool = False,
+    downgrade: bool = False,
 ) -> int:
-    """Apply `change` to the manifest, then reconcile against the render of the manifest as last applied (§2.3)."""
+    """Apply `change` to the manifest, then reconcile against the render of the manifest as last applied (§2.3).
+
+    A change also stores the options this version declares (§8.6). Only `update` (`downgrade`) may reconcile a
+    manifest a later release wrote.
+    """
     _check_repo(repo, allow_dirty=opts.allow_dirty or opts.dry_run or check)
     current = manifest.load(repo)
     if current is None:
         msg = f"no {manifest.MANIFEST_PATH} in {repo}; use `tmpl adopt`"
+        raise UsageError(msg)
+    if not downgrade and current.version and _version(current.version) > _version(__version__):
+        msg = (
+            f"{manifest.MANIFEST_PATH} is at tmpl {current.version}, later than this tmpl {__version__}; "
+            f"use tmpl {current.version} or later, or `tmpl update --to {__version__}` to move back"
+        )
         raise UsageError(msg)
     applied = _applied(repo, current)
     if change is not None and applied is None:
@@ -371,6 +384,7 @@ def _reconcile(
     base = _render_base(applied, repo) if applied else None
     if change is not None:
         change(current)
+        _refresh_options(repo, current)
     current.version = __version__
     manifest.stamp(current)
     actions = reconcile.plan(repo, base, render(current, repo.name, repo), opts.prefer)
@@ -438,8 +452,6 @@ def remove(path: str, *, repo: Path = Path(), opts: Reconcile | None = None) -> 
         current.unit.remove(unit)
         if unit.lang not in current.langs:
             current.lang.pop(unit.lang, None)
-        # Language options its features declared go with them.
-        _refresh_options(root)(current)
 
     return _reconcile(root, opts or Reconcile(), change)
 
@@ -513,7 +525,6 @@ def feature_add(
         else:
             current.features = [*attached, feature]
         _set_feature_options(current, feature, unit, given)
-        _refresh_options(root)(current)
 
     return _reconcile(root, opts or Reconcile(), change)
 
@@ -546,7 +557,6 @@ def feature_remove(feature: str, path: str | None = None, *, repo: Path = Path()
             unit.features.remove(feature)
         else:
             current.features = [f for f in attached if f != feature]
-        _refresh_options(root)(current)
 
     return _reconcile(root, opts or Reconcile(), change)
 

@@ -342,13 +342,15 @@ Removes the unit from the manifest and reconciles:
 
 Attaches a feature to or detaches it from the root (no `PATH`) or the unit at `PATH`, checked against §4.3, and reconciles. Root features are stored in `[root] features`, unit features in the unit's `features`. Adding one already attached, or removing one that isn't, is refused. Removal follows the same rules as §8.4. Removing a unit also removes its features.
 
-`feature add --opt KEY=VALUE` sets an option the feature declares. Its other options are stored with their defaults. Removing a feature, or the unit it's attached to, drops the options only it declared. Both print each change, as `update` does (§8.6).
+`feature add --opt KEY=VALUE` sets an option the feature declares. Its other options are stored with their defaults. Removing a feature, or the unit it's attached to, drops the options only it declared, through the option refresh every change runs (§8.6).
 
 ### 8.6 `tmpl update [PATH] [--to VERSION]`
 
 Bumps `version` (default: the latest `vX.Y.Z` tag in `source`, read with `git ls-remote`) and reconciles. The target release does the work: when it isn't the running one, tmpl runs `uvx --no-config --from <source>@v<VERSION> tmpl update --to <VERSION>` (`tmpl sync` for releases before 0.4.0, which lack `update`), passing `--prefer`, `--dry-run` and `--allow-dirty` on. The base is still rendered by the release that applied the manifest (§10).
 
 Options follow the target release. Ones it declares that the manifest lacks are stored with their defaults, and ones it no longer declares are dropped. Each is printed (`new  [root] key = value`, `dropped  [unit apps/tool] key = value`). Stored values are never changed, so a changed default reaches only options added by the update. Every option has a default, so update asks nothing.
+
+Every change (`add`, `remove`, `set`, `feature`) stamps the running release as `version` and refreshes options the same way, so the manifest always holds the options of the release it names. `sync` applies the manifest as it stands and refreshes nothing. Only `update` reconciles a manifest whose `version` is later than the running release; every other reconcile refuses it rather than drop the later release's options.
 
 ### 8.7 `tmpl sync`
 

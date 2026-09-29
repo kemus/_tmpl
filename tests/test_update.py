@@ -112,3 +112,30 @@ def test_update_refuses_a_malformed_version(version: str, tmp_path: Path) -> Non
     repo = new_repo(tmp_path, "python:lib")
     with pytest.raises(UsageError, match=r"expected X\.Y\.Z"):
         run("update", str(repo), "--to", version)
+
+
+def test_every_change_refreshes_options(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = new_repo(tmp_path, "python:lib")
+    edited = recorded(repo)
+    edited.root["gone"] = 1
+    manifest.dump(repo, edited)
+    commit_all(repo, "hand edit")
+    capsys.readouterr()
+    assert run("set", "sync_check=false", "--repo", str(repo)) == 0
+    assert " dropped  [root] gone = 1" in capsys.readouterr().out
+    assert "gone" not in recorded(repo).root
+    assert recorded(repo).root["sync_check"] is False
+
+
+def test_changes_refuse_a_manifest_from_a_later_release(tmp_path: Path) -> None:
+    repo = new_repo(tmp_path, "python:lib")
+    later = recorded(repo)
+    later.version = "99.0.0"
+    manifest.dump(repo, later)
+    commit_all(repo, "from a later release")
+    with pytest.raises(UsageError, match=r"is at tmpl 99\.0\.0, later than this tmpl"):
+        run("set", "sync_check=false", "--repo", str(repo))
+    with pytest.raises(UsageError, match="later than this tmpl"):
+        run("sync", str(repo))
+    assert run("update", str(repo), "--to", __version__) == 0
+    assert recorded(repo).version == __version__
