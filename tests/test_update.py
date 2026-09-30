@@ -2,6 +2,7 @@
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -139,3 +140,9 @@ def test_changes_refuse_a_manifest_from_a_later_release(tmp_path: Path) -> None:
         run("sync", str(repo))
     assert run("update", str(repo), "--to", __version__) == 0
     assert recorded(repo).version == __version__
+
+
+def test_tool_output_follows_ours_on_a_pipe() -> None:
+    script = 'import sys; from tmpl import proc; sys.stdout.write("ours\\n"); proc.run("echo", "tool", capture=False)'
+    done = proc.run(sys.executable, "-c", script)
+    assert (done.returncode, done.stdout) == (0, "ours\ntool\n")
