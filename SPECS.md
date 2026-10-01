@@ -244,7 +244,7 @@ Layers never template shared files directly. They declare **fragments** (data) a
 | File | Policy | Notes |
 |---|---|---|
 | `README.md` | seed | sections from `readme.sections` at creation |
-| `LICENSE` | seed | from the root `license` option (default MIT; the old template's picker is kept) |
+| `LICENSE` | seed | from the root `license` option, an SPDX id: MIT (default), Apache-2.0, BSD-2-Clause, BSD-3-Clause, BSL-1.0, MPL-2.0, EPL-2.0, LGPL-2.1-only, LGPL-3.0-only, GPL-2.0-only, GPL-3.0-only, AGPL-3.0-only, CC0-1.0 or Unlicense. The texts are bundled (GitHub's license templates plus LGPL-3.0), so rendering needs no network |
 | `.gitignore` | merge (line-set) | always contains `/third_party/` |
 | `.editorconfig` | merge | |
 | `.config/mise/config.toml` | merge | |
