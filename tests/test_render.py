@@ -61,7 +61,7 @@ LICENSES = catalog.options_for(["root"], "root")["license"].choices or []
 
 def test_every_license_choice_has_its_text() -> None:
     texts = {path.stem for path in (catalog.TEMPLATES / "root" / "licenses").glob("*.jinja")}
-    assert texts == set(LICENSES)
+    assert texts == {str(id_).removesuffix("-only").removesuffix("-or-later") for id_ in LICENSES}
 
 
 @pytest.mark.parametrize("license_", LICENSES)
@@ -69,6 +69,7 @@ def test_license_choice_renders(license_: object) -> None:
     tree = render(attrs.evolve(MANIFEST, root={**MANIFEST.root, "license": license_}), "demo-tool")
     assert tomllib.loads(tree["pyproject.toml"].content)["project"]["license"] == license_
     text = tree["LICENSE"].content
+    assert text[0] != "\n"
     assert text.endswith("\n")
     assert not text.endswith("\n\n")
     assert "[fullname]" not in text

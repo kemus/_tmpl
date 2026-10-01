@@ -1,1 +1,2 @@
-{% include "licenses/" ~ license ~ ".jinja" %}
+{# GNU ids name their text without -only/-or-later: both variants ship the same text. #}
+{% include "licenses/" ~ license | replace("-only", "") | replace("-or-later", "") ~ ".jinja" %}
