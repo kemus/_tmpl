@@ -244,7 +244,7 @@ Layers never template shared files directly. They declare **fragments** (data) a
 | File | Policy | Notes |
 |---|---|---|
 | `README.md` | seed | sections from `readme.sections` at creation |
-| `LICENSE` | seed | from the root `license` option, an SPDX id: MIT (default), Apache-2.0, BSD-2-Clause, BSD-3-Clause, BSL-1.0, MPL-2.0, EPL-2.0, CC0-1.0, Unlicense, or LGPL-2.1, LGPL-3.0, GPL-2.0, GPL-3.0 or AGPL-3.0 with `-only` or `-or-later`. The texts are bundled (GitHub's license templates plus LGPL-3.0), so rendering needs no network |
+| `LICENSE` | follow | from the root `license` option, an SPDX id: MIT (default), Apache-2.0, BSD-2-Clause, BSD-3-Clause, BSL-1.0, MPL-2.0, EPL-2.0, CC0-1.0, Unlicense, or LGPL-2.1, LGPL-3.0, GPL-2.0, GPL-3.0 or AGPL-3.0 with `-only` or `-or-later`. The texts are bundled (GitHub's license templates plus LGPL-3.0), so rendering needs no network. Changing the option replaces an unedited `LICENSE`; an edited one gets conflict markers |
 | `.gitignore` | merge (line-set) | always contains `/third_party/` |
 | `.editorconfig` | merge | |
 | `.config/mise/config.toml` | merge | |
@@ -260,8 +260,9 @@ Layers never template shared files directly. They declare **fragments** (data) a
 |---|---|---|---|
 | `merge` | write | 3-way merge (§7) | delete if unchanged from base, else keep + report |
 | `seed` | write if absent | never touched | delete if unchanged from base, else keep + report |
+| `follow` | write if absent | 3-way merge (§7); with no base (adopt) an existing file is kept, as for `seed` | delete if unchanged from base, else keep + report |
 
-Scaffold source (`src/…`, `tests/test_*.py`, `src/main.rs`, …) and `README.md` are `seed`. Config and tooling files are `merge`.
+Scaffold source (`src/…`, `tests/test_*.py`, `src/main.rs`, …) and `README.md` are `seed`. `LICENSE` is `follow`, so it tracks the `license` option without adopt replacing an existing one. Config and tooling files are `merge`.
 
 ## 7. Merge engine
 

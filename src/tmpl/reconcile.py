@@ -46,7 +46,7 @@ def plan(repo: Path, base: Tree | None, target: Tree, prefer: Prefer | None = No
             action = _missing(path, b, t, adopt=adopt)
         elif t is None:
             action = _dropped(path, b, ours)
-        elif t.policy == "seed":
+        elif t.policy == "seed" or (t.policy == "follow" and b is None):
             action = None
         else:
             action = _merged(path, b, ours, t, prefer)
@@ -61,7 +61,7 @@ def _missing(path: str, b: RenderedFile | None, t: RenderedFile | None, *, adopt
         return None
     if b is None:
         return None if adopt and t.scaffold else Action(path, "create", t.content, force_add=t.force_add)
-    if t.policy == "merge" and b.content != t.content:
+    if t.policy != "seed" and b.content != t.content:
         return Action(path, "conflict", notes=["deleted locally but changed in the template"])
     return None
 

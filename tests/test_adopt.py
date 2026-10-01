@@ -58,6 +58,17 @@ def test_adopt_detects_and_preserves(repo: Path) -> None:
     assert "third_party/.gitkeep" in git(repo, "ls-files", "--cached", "third_party")
 
 
+def test_adopt_keeps_an_existing_license(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    (repo / "LICENSE").write_text("MIT License\n\nCopyright (c) 2020 Legacy Author\n")
+    commit_all(repo, "license")
+    assert run("adopt", str(repo), "--yes") == 0
+    commit_all(repo, "adopt tmpl")
+    assert (repo / "LICENSE").read_text() == "MIT License\n\nCopyright (c) 2020 Legacy Author\n"
+    capsys.readouterr()
+    assert run("sync", str(repo)) == 0
+    assert capsys.readouterr().out.strip() == "nothing to do"
+
+
 def test_sync_after_adopt_is_a_no_op(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert run("adopt", str(repo), "--yes") == 0
     commit_all(repo, "adopt tmpl")

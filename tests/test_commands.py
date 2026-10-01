@@ -37,6 +37,24 @@ def test_set_a_root_option_updates_the_manifest_and_files(tmp_path: Path) -> Non
     assert "indent_size = 4" in (repo / ".editorconfig").read_text().split("[*]\n")[1].split("\n[")[0]
 
 
+def test_set_license_replaces_an_unedited_license(tmp_path: Path) -> None:
+    repo = new_repo(tmp_path, "python:lib")
+    assert run("set", "license=GPL-3.0-or-later", "--repo", str(repo)) == 0
+    assert (repo / "LICENSE").read_text().lstrip().startswith("GNU GENERAL PUBLIC LICENSE\n")
+    assert tomllib.loads((repo / "pyproject.toml").read_text())["project"]["license"] == "GPL-3.0-or-later"
+
+
+def test_set_license_conflicts_with_an_edited_license(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = new_repo(tmp_path, "python:lib")
+    license_ = repo / "LICENSE"
+    license_.write_text(license_.read_text().replace("Copyright (c) ", "Copyright (c) 2026 "))
+    commit_all(repo, "date the license")
+    capsys.readouterr()
+    assert run("set", "license=Apache-2.0", "--repo", str(repo)) == 1
+    assert "conflict  LICENSE" in capsys.readouterr().out
+    assert "<<<<<<< ours" in license_.read_text()
+
+
 def test_set_a_language_option(tmp_path: Path) -> None:
     repo = new_repo(tmp_path, "python:lib")
     assert run("set", "type_checker_thorough=none", "--repo", str(repo)) == 0

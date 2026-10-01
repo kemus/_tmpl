@@ -18,7 +18,8 @@ TEMPLATES = Path(__file__).parent / "templates"
 
 type Scope = Literal["root", "lang", "unit"]
 type Attach = Literal["root", "unit"]
-type Policy = Literal["merge", "seed"]
+# "follow": merged like "merge", but with no base (adopt) an existing file is kept, like a seed.
+type Policy = Literal["merge", "seed", "follow"]
 type SetKey = Literal["exact", "requirement"]
 
 

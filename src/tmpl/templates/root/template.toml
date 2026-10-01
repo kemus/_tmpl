@@ -124,5 +124,6 @@ data = { title = "Commands", body = """
 - `mise run fix`: apply autofixes
 - Run tools through `mise exec --`.""" }
 
+# Follows the license option while unedited; adopt keeps an existing LICENSE.
 [files."LICENSE"]
-policy = "seed"
+policy = "follow"
