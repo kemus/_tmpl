@@ -8,7 +8,7 @@ resolution-markers = [
 
 [options]
 exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
-exclude-newer-span = "P7D"
+exclude-newer-span = "PT72H"
 
 [[package]]
 name = "ast-serialize"
@@ -540,7 +540,7 @@ wheels = [
 
 [[package]]
 name = "tmpl"
-version = "0.5.1"
+version = "0.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
