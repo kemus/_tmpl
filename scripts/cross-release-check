@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Create a repo with tmpl OLD, update it to NEW, then move it back to OLD, checking `sync --check` after each step.
+# Releases come from GitHub tags; uv caches, XDG dirs and git config go to a throwaway directory, kept on failure.
+#
+# Usage: mise run cross-release [OLD [NEW]]   (versions like 0.6.0; default: the two latest local v* tags)
+set -Eeuo pipefail
+
+source_url="git+https://github.com/kemus/_tmpl"
+mapfile -t tags < <(git tag --list 'v[0-9]*' --sort=-v:refname)
+new="${2:-${tags[0]#v}}"
+old="${1:-${tags[1]#v}}"
+# Resolved before XDG_DATA_HOME moves, which would hide mise's installs from a shim.
+uvx="$(command -v uvx)"
+
+work="$(mktemp -d)"
+trap 'echo "failed; kept $work" >&2' ERR
+export UV_CACHE_DIR="$work/cache/uv" UV_TOOL_DIR="$work/tools" UV_TOOL_BIN_DIR="$work/tools/bin"
+export XDG_CACHE_HOME="$work/cache" XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" XDG_STATE_HOME="$work/state"
+export GIT_CONFIG_GLOBAL="$work/gitconfig" GIT_CONFIG_NOSYSTEM=1
+git config --global user.name "cross-release-check"
+git config --global user.email "cross-release-check@example.invalid"
+git config --global init.defaultBranch main
+
+repo="$work/repo"
+tmpl() {
+  local version="$1"
+  shift
+  echo "+ tmpl $version: $*" >&2
+  "$uvx" --no-config --from "$source_url@v$version" tmpl "$@"
+}
+commit() {
+  git -C "$repo" add -A
+  git -C "$repo" commit -qm "$1"
+}
+
+tmpl "$old" init "$repo" --unit=python:lib --no-setup
+tmpl "$new" update "$repo" --to "$new"
+commit "update to $new"
+tmpl "$new" sync "$repo" --check
+tmpl "$new" update "$repo" --to "$old"
+commit "move back to $old"
+tmpl "$old" sync "$repo" --check
+
+chmod -R u+w "$work"
+rm -rf "$work"
+echo "ok: $old -> $new -> $old"
