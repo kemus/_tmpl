@@ -84,7 +84,7 @@ data = { uses = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", com
 [[fragment]]
 sink = "ci.steps"
 order = 1
-data = { uses = "jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c", comment = "v4.3.0" }
+data = { uses = "jdx/mise-action@94c60b39bc2d90ab2f9bab27f38d3cc4812c1834", comment = "v5.1.0" }
 
 [[fragment]]
 sink = "ci.steps"
