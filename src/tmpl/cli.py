@@ -669,7 +669,12 @@ def _render_base(recorded: Manifest, repo: Path) -> Tree:
         release = ("uvx", "--no-config", "--from", recorded.spec, "tmpl")
         proc.check(*release, "render", "--repo", str(repo), "--manifest", str(applied), "--out", str(out))
         index = json.loads((out / RENDER_INDEX).read_text())
-        return {path: RenderedFile((out / path).read_text(), **meta) for path, meta in index.items()}
+        # A later release may index fields this one lacks; drop them so a downgrade still renders its base.
+        known = attrs.fields_dict(RenderedFile).keys() - {"content"}
+        return {
+            path: RenderedFile((out / path).read_text(), **{k: v for k, v in meta.items() if k in known})
+            for path, meta in index.items()
+        }
 
 
 @app.command(name="render")

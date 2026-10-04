@@ -398,7 +398,7 @@ The tool also detects existing mise, hk, and CI config and maps it into the reco
 ## 10. Versioning and base rendering
 
 - `tmpl` releases are semver git tags (`v0.1.0`, …) on this repo. Templates ship inside the Python package, so a tag pins the tool and its templates together.
-- The old base is rendered by **the old release itself**: `uvx --no-config --from git+<source>@v<old> tmpl render <tmp> --repo <repo> --manifest <applied>`, which renders the applied manifest (§8.7) with the repo's live-sourced options and writes the tree plus a `.tmpl-render.json` index of each file's policy. Rendering logic changes between versions can't corrupt the base. uv's cache keeps repeated updates cheap and makes them work offline after the first run.
+- The old base is rendered by **the old release itself**: `uvx --no-config --from git+<source>@v<old> tmpl render <tmp> --repo <repo> --manifest <applied>`, which renders the applied manifest (§8.7) with the repo's live-sourced options and writes the tree plus a `.tmpl-render.json` index of each file's policy. The reader ignores index fields it doesn't know, so a release that adds one can still be downgraded from. Rendering logic changes between versions can't corrupt the base. uv's cache keeps repeated updates cheap and makes them work offline after the first run.
 - `render` is the internal, side-effect-free primitive: manifest in, file tree out. Every other command is built on it, and it is the stable contract between versions. `tmpl render` produces the base side (§2.3).
 
 ## 11. Implementation

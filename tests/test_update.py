@@ -1,5 +1,6 @@
 """`tmpl update`: move a repo to another tmpl release (§8.6)."""
 
+import json
 import shutil
 import subprocess
 import sys
@@ -8,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from tmpl import __version__, catalog, manifest, proc
-from tmpl.cli import UsageError
+from tmpl.cli import RENDER_INDEX, UsageError
 
 from .conftest import commit_all, git
 from .test_commands import new_repo, recorded, run
@@ -146,3 +147,35 @@ def test_tool_output_follows_ours_on_a_pipe() -> None:
     script = 'import sys; from tmpl import proc; sys.stdout.write("ours\\n"); proc.run("echo", "tool", capture=False)'
     done = proc.run(sys.executable, "-c", script)
     assert (done.returncode, done.stdout) == (0, "ours\ntool\n")
+
+
+def test_base_render_ignores_index_fields_from_a_later_release(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = new_repo(tmp_path, "python:lib")
+    other = recorded(repo)
+    other.version = "0.1.0"
+    manifest.stamp(other)
+    manifest.dump(repo, other)
+    commit_all(repo, "applied by another release")
+    real_run = proc.run
+
+    def fake_release(*args: str, cwd: Path | None = None, capture: bool = True) -> subprocess.CompletedProcess[str]:
+        if args[0] != "uvx":
+            return real_run(*args, cwd=cwd, capture=capture)
+        # The repo's own files as the base, indexed with a field this release doesn't know.
+        out = Path(args[args.index("--out") + 1])
+        index: dict[str, object] = {}
+        for path in git(repo, "ls-files").splitlines():
+            if path != manifest.MANIFEST_PATH.as_posix():
+                (out / path).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(repo / path, out / path)
+                index[path] = {"policy": "merge", "scaffold": False, "force_add": False, "added_later": 1}
+        (out / RENDER_INDEX).write_text(json.dumps(index))
+        return subprocess.CompletedProcess(args, 0)
+
+    monkeypatch.setattr(proc, "run", fake_release)
+    capsys.readouterr()
+    assert run("sync", str(repo)) == 0
+    assert recorded(repo).version == __version__
+    assert git(repo, "status", "--porcelain").strip() == f"M {manifest.MANIFEST_PATH.as_posix()}"
