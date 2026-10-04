@@ -61,12 +61,20 @@ def test_adopt_detects_and_preserves(repo: Path) -> None:
 def test_adopt_keeps_an_existing_license(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
     (repo / "LICENSE").write_text("MIT License\n\nCopyright (c) 2020 Legacy Author\n")
     commit_all(repo, "license")
+    capsys.readouterr()
     assert run("adopt", str(repo), "--yes") == 0
+    assert "   noted  LICENSE\n            kept; differs from the template's text" in capsys.readouterr().out
     commit_all(repo, "adopt tmpl")
     assert (repo / "LICENSE").read_text() == "MIT License\n\nCopyright (c) 2020 Legacy Author\n"
-    capsys.readouterr()
     assert run("sync", str(repo)) == 0
     assert capsys.readouterr().out.strip() == "nothing to do"
+
+
+def test_adopt_prefer_template_replaces_an_existing_license(repo: Path) -> None:
+    (repo / "LICENSE").write_text("MIT License\n\nCopyright (c) 2020 Legacy Author\n")
+    commit_all(repo, "license")
+    assert run("adopt", str(repo), "--yes", "--prefer", "template") == 0
+    assert "Permission is hereby granted" in (repo / "LICENSE").read_text()
 
 
 def test_sync_after_adopt_is_a_no_op(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:

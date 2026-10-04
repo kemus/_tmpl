@@ -46,8 +46,10 @@ def plan(repo: Path, base: Tree | None, target: Tree, prefer: Prefer | None = No
             action = _missing(path, b, t, adopt=adopt)
         elif t is None:
             action = _dropped(path, b, ours)
-        elif t.policy == "seed" or (t.policy == "follow" and b is None):
+        elif t.policy == "seed":
             action = None
+        elif t.policy == "follow" and b is None:
+            action = _adopted(path, ours, t, prefer)
         else:
             action = _merged(path, b, ours, t, prefer)
         if action is not None:
@@ -71,6 +73,15 @@ def _dropped(path: str, b: RenderedFile | None, ours: str) -> Action:
     if b is not None and ours == b.content:
         return Action(path, "delete")
     return Action(path, "kept", notes=["modified locally; no longer part of the template"])
+
+
+def _adopted(path: str, ours: str, t: RenderedFile, prefer: Prefer | None) -> Action | None:
+    """A `follow` file with no base: keep ours and report a difference, or replace it with --prefer template."""
+    if ours == t.content:
+        return None
+    if prefer == "template":
+        return Action(path, "update", t.content, notes=["replaced with the template's text"])
+    return Action(path, "noted", notes=["kept; differs from the template's text (--prefer template replaces it)"])
 
 
 def _merged(path: str, b: RenderedFile | None, ours: str, t: RenderedFile, prefer: Prefer | None) -> Action | None:

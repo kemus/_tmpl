@@ -260,7 +260,7 @@ Layers never template shared files directly. They declare **fragments** (data) a
 |---|---|---|---|
 | `merge` | write | 3-way merge (§7) | delete if unchanged from base, else keep + report |
 | `seed` | write if absent | never touched | delete if unchanged from base, else keep + report |
-| `follow` | write if absent | 3-way merge (§7); with no base (adopt) an existing file is kept, as for `seed` | delete if unchanged from base, else keep + report |
+| `follow` | write if absent | 3-way merge (§7); with no base (adopt) an existing file is kept and a difference reported (`--prefer template` replaces it) | delete if unchanged from base, else keep + report |
 
 Scaffold source (`src/…`, `tests/test_*.py`, `src/main.rs`, …) and `README.md` are `seed`. `LICENSE` is `follow`, so it tracks the `license` option without adopt replacing an existing one. Config and tooling files are `merge`.
 
@@ -306,6 +306,7 @@ set_like = { "project.dependencies" = "requirement", "dependency-groups.*" = "re
 - Structured files: keys only in theirs are added. Differing values **keep ours and are reported** (`--prefer template` flips this).
 - Line-set files: union.
 - Text files: whole-file conflict unless identical. `--prefer ours|template` resolves it without markers. `--prefer` only ever applies when there is no base; a real 3-way conflict always gets markers.
+- `follow` files (`LICENSE`): an existing file is kept, and a difference from the template is reported (`--prefer template` replaces it).
 - Scaffold files (`scaffold = true`, e.g. a unit's `src/**`) are never created by adopt: an existing project already has its own layout.
 
 ## 8. Commands
