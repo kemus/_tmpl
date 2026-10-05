@@ -56,6 +56,12 @@ def test_hk_runs_thorough_checker_only_under_slow_profile() -> None:
     assert "prefix" not in pkl
 
 
+def test_ci_checkout_drops_the_token() -> None:
+    ci = render(MANIFEST, "demo-tool")[".github/workflows/ci.yml"].content
+    assert "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1\n" in ci
+    assert "        with:\n          persist-credentials: false\n" in ci
+
+
 LICENSES = catalog.options_for(["root"], "root")["license"].choices or []
 
 

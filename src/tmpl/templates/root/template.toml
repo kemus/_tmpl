@@ -79,7 +79,8 @@ data = { uv = "latest" }
 [[fragment]]
 sink = "ci.steps"
 order = 0
-data = { uses = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", comment = "v7.0.1" }
+# The job only reads the repo; no later step needs the token in .git/config.
+data = { uses = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", comment = "v7.0.1", with = { persist-credentials = false } }
 
 [[fragment]]
 sink = "ci.steps"
