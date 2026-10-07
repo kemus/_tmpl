@@ -113,11 +113,13 @@ def test_update_to_another_release_runs_it(tmp_path: Path, monkeypatch: pytest.M
 
 
 def test_update_defaults_to_the_latest_release_tag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    future_major = int(__version__.partition(".")[0]) + 1
+    latest = f"{future_major}.10.0"
     source = tmp_path / "source"
     source.mkdir()
     git(source, "init", "-q")
     git(source, "commit", "-q", "--allow-empty", "-m", "release")
-    for tag in ("v0.1.0", "v0.10.0", "v0.9.2", "v1.0.0rc1", "latest"):
+    for tag in (f"v{future_major}.1.0", f"v{latest}", f"v{future_major}.9.2", f"v{future_major + 1}.0.0rc1", "latest"):
         git(source, "tag", tag)
     repo = new_repo(tmp_path, "python:lib")
     current = recorded(repo)
@@ -135,7 +137,7 @@ def test_update_defaults_to_the_latest_release_tag(tmp_path: Path, monkeypatch: 
 
     monkeypatch.setattr(proc, "run", fake_uvx)
     assert run("update", str(repo)) == 0
-    assert calls[0][3] == f"git+file://{source}@v0.10.0"
+    assert calls[0][3] == f"git+file://{source}@v{latest}"
 
 
 def test_update_refuses_a_versionless_manifest(tmp_path: Path) -> None:
