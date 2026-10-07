@@ -102,7 +102,7 @@ Three facts can't be recovered reliably from the tree:
 ```toml
 version = "0.4.0"                 # tmpl release that produced the last render
 # source = "git+https://github.com/kemus/_tmpl"   # optional override (forks / local dev)
-applied = "sha256:…"              # hash of this file, minus this line, as the last reconcile wrote it
+applied = "sha256:…"              # hash of normalized content without this field (§8.7)
 
 [root]
 description = "…"
@@ -364,6 +364,11 @@ Reconciles the current manifest at the current version, e.g. after a hand edit o
 `add`, `remove`, `set`, `feature` and `update` need a manifest with a `version`; on one from `adopt --plan`, edit it and run `tmpl sync` instead.
 
 The base is the manifest the last reconcile applied. Every reconcile stamps `applied`, the hash of the manifest's normalized content without that line. When the file still hashes to it, the file is the base. Otherwise it was hand-edited, and sync walks the file's git history, newest first, for the version with that hash; the common case needs no history, so shallow CI clones work. If no commit holds it (a reconcile left uncommitted, then edited again), sync refuses: commit reconciles before editing the manifest.
+
+Hash normalization always uses expanded option tables, as older releases did, even though the manifest displays
+tool selections inline. Release 0.9.0 mistakenly included that display change in its hashes. Its inline-table
+stamps are accepted when reading current or historical 0.9.0 manifests, then replaced with canonical stamps on
+reconcile. To downgrade a repo already reconciled by 0.9.0 to 0.8.1, first update it through the corrected release.
 
 `--check` writes nothing. It prints the diff and exits 1 when a sync would change anything, including restamping the manifest's `version` or `applied` hash. It accepts a dirty worktree. With the root option `sync_check` (default `true`), the root layer adds an hk step `tmpl_sync` running `uvx --no-config --from <source>@v<version> tmpl sync --check`, the release the manifest records. The step is slow: it runs on `pre-push` and in CI. It catches drift that only a sync repairs, such as a PEP 723 header that no longer matches the `scripts` dependency group (§5.3). CI needs read access to `source`.
 

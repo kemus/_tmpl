@@ -8,11 +8,37 @@ from pathlib import Path
 
 import pytest
 
-from tmpl import __version__, catalog, manifest, proc
+from tmpl import __version__, catalog, cli, manifest, proc
 from tmpl.cli import RENDER_INDEX, UsageError
 
 from .conftest import commit_all, git
 from .test_commands import new_repo, recorded, run
+from .test_manifest import INLINE_STAMP, released_manifest
+
+
+@pytest.mark.parametrize("edited", [False, True])
+def test_update_recovers_released_inline_stamps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    edited: bool,
+) -> None:
+    # Keep the recorded and running version equal so this regression needs no downloaded renderer.
+    monkeypatch.setattr(cli, "__version__", "0.9.0")
+    repo = tmp_path / "new-tool"
+    assert run("init", str(repo), "--unit=python:lib", "--opt=author=cross-release-check", "--no-setup") == 0
+    current = released_manifest()
+    manifest.dump(repo, current)
+    commit_all(repo, "record the released inline stamp")
+    if edited:
+        current.root["indent"] = "4"
+        manifest.dump(repo, current)
+        commit_all(repo, "edit an option after the released stamp")
+    assert run("update", str(repo), "--to=0.9.0") == 0
+    repaired = recorded(repo)
+    assert repaired.applied != INLINE_STAMP
+    assert repaired.root["indent"] == ("4" if edited else "2")
+    assert run("sync", str(repo), "--check") == 0
 
 
 def test_update_to_this_version_records_new_options(

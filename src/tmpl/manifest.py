@@ -108,7 +108,7 @@ def load(repo: Path) -> Manifest | None:
     return loads(path.read_text())
 
 
-def dumps(manifest: Manifest) -> str:
+def dumps(manifest: Manifest, *, inline_options: bool = True) -> str:
     doc = tomlkit.document()
     doc.add("version", manifest.version)
     if manifest.source:
@@ -116,11 +116,11 @@ def dumps(manifest: Manifest) -> str:
     if manifest.applied:
         doc.add("applied", manifest.applied)
     doc.add(tomlkit.nl())
-    doc.add("root", _table(manifest.root))
+    doc.add("root", _table(manifest.root, inline=inline_options))
     langs = tomlkit.table(is_super_table=True)
     for lang, options in manifest.lang.items():
         if options:
-            langs[lang] = _table(options)
+            langs[lang] = _table(options, inline=inline_options)
     if langs:
         doc.add("lang", langs)
     units: list[Table] = []
@@ -130,16 +130,26 @@ def dumps(manifest: Manifest) -> str:
         if unit.features:
             table["features"] = unit.features
         if unit.options:
-            table["options"] = _table(unit.options)
+            table["options"] = _table(unit.options, inline=inline_options)
         units.append(table)
     doc.add("unit", AoT(units))
     return tomlkit.dumps(doc)
 
 
 def digest(manifest: Manifest) -> str:
-    """Hash of the manifest's normalized content, without its own `applied` stamp."""
-    text = dumps(attrs.evolve(manifest, applied=None))
+    """Hash using the original expanded-table representation, independent of display formatting."""
+    text = dumps(attrs.evolve(manifest, applied=None), inline_options=False)
     return f"sha256:{hashlib.sha256(text.encode()).hexdigest()}"
+
+
+def matches_digest(manifest: Manifest, expected: str) -> bool:
+    """Recognize the canonical stamp and the inline-table stamp written only by 0.9.0."""
+    if digest(manifest) == expected:
+        return True
+    if manifest.version != "0.9.0":
+        return False
+    text = dumps(attrs.evolve(manifest, applied=None))
+    return f"sha256:{hashlib.sha256(text.encode()).hexdigest()}" == expected
 
 
 def stamp(manifest: Manifest) -> None:
@@ -153,10 +163,10 @@ def dump(repo: Path, manifest: Manifest) -> None:
     path.write_text(dumps(manifest))
 
 
-def _table(options: Options) -> Table:
+def _table(options: Options, *, inline: bool) -> Table:
     table = tomlkit.table()
     for key, value in options.items():
-        table[key] = _inline(value) if is_map(value) else value
+        table[key] = _inline(value) if inline and is_map(value) else value
     return table
 
 

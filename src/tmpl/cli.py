@@ -628,14 +628,14 @@ def _applied(repo: Path, current: Manifest) -> Manifest | None:
     """
     if not current.version:
         return None
-    if current.applied is None or manifest.digest(current) == current.applied:
+    if current.applied is None or manifest.matches_digest(current, current.applied):
         return current
     for text in git.file_history(repo, manifest.MANIFEST_PATH.as_posix()):
         try:
             past = manifest.loads(text)
         except (tomllib.TOMLDecodeError, cattrs.BaseValidationError):
             continue
-        if manifest.digest(past) == current.applied:
+        if manifest.matches_digest(past, current.applied):
             return past
     msg = (
         f"{manifest.MANIFEST_PATH} was edited since the last reconcile, and no commit holds the manifest that "
