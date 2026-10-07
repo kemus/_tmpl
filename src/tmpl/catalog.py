@@ -27,6 +27,14 @@ STAGES: tuple[Stage, ...] = ("pre-commit", "pre-push", "ci")
 
 
 @attrs.frozen
+class OptionContext:
+    """Files rendered without optional tools, and the layers selected by the manifest."""
+
+    files: frozenset[str]
+    layers: frozenset[str]
+
+
+@attrs.frozen
 class OptionSpec:
     scope: Scope
     default: object = None
@@ -35,9 +43,32 @@ class OptionSpec:
     type: Literal["str", "int", "bool", "tools"] = "str"
     # Options this one took over: old option → the stage its value gets (`migrate`).
     replaces: dict[str, Stage] = attrs.field(factory=dict[str, Stage])
+    # Repo-relative fnmatch patterns; a tool group needs at least one matching rendered file.
+    files: list[str] | None = None
+    # First selected layer wins; a stored answer always takes precedence over defaults.
+    default_by_layer: dict[str, object] = attrs.field(factory=dict[str, object])
     # Live source: "<file relative to the scope's path>:<dotted key>"; never stored (§3.2).
     source: str | None = None
     source_pattern: str | None = None
+
+    def __attrs_post_init__(self) -> None:
+        if self.type != "tools" and (self.files is not None or self.default_by_layer):
+            msg = "files and default_by_layer are only supported on tools options"
+            raise ValueError(msg)
+
+    def available(self, context: OptionContext | None) -> bool:
+        return (
+            context is None
+            or self.files is None
+            or any(fnmatch(path, pattern) for path in context.files for pattern in self.files)
+        )
+
+    def default_for(self, context: OptionContext | None) -> object:
+        if context is not None:
+            for layer_id, value in self.default_by_layer.items():
+                if layer_id in context.layers:
+                    return value
+        return self.default
 
     def coerce(self, name: str, value: object) -> object:
         if self.type == "tools":
@@ -230,20 +261,32 @@ class Resolved:
     stored: dict[str, object] = attrs.field(factory=dict[str, object])
 
 
-def resolve(specs: dict[str, OptionSpec], given: dict[str, object], live_root: Path | None) -> Resolved:
+def resolve(
+    specs: dict[str, OptionSpec],
+    given: dict[str, object],
+    live_root: Path | None,
+    context: OptionContext | None = None,
+) -> Resolved:
     unknown = set(given) - set(specs)
     if unknown:
         msg = f"unknown options: {sorted(unknown)}"
         raise ValueError(msg)
     out = Resolved()
     for name, spec in specs.items():
+        if not spec.available(context):
+            if name in given:
+                msg = f"option {name}: no rendered file matches {spec.files}"
+                raise ValueError(msg)
+            # Templates may still reference an unavailable tool group in their conditions.
+            out.values[name] = {}
+            continue
         if spec.source:
             live = read_live(spec, live_root) if live_root else None
-            value = live if live is not None else given.get(name, spec.default)
+            value = live if live is not None else given.get(name, spec.default_for(context))
             if value is not None:
                 out.values[name] = spec.coerce(name, value)
             continue
-        value = given.get(name, spec.default)
+        value = given.get(name, spec.default_for(context))
         if value is None:
             continue
         out.values[name] = out.stored[name] = spec.coerce(name, value)

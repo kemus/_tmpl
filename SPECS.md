@@ -162,6 +162,20 @@ Options are validated against each other (e.g. `test = "bun test"` requires `pac
 
 Tool options (`type = "tools"`) pick any number of their choices, each at a stage: `pre-commit` runs it in `pre-commit` and `check`; `pre-push` runs it in `pre-push` and in CI (`mise run check` in CI enables it through an hk profile); `ci` runs it in CI only. The manifest stores a table of tool → stage; `set` and `--opt` take `tool[:stage],…` (the stage defaults to `pre-commit`), or `none` for no tool. `type_checkers` replaced the single-choice `type_checker_fast` and `type_checker_thorough` options: an option's `replaces` table names the options it took over and the stage each one's tool gets, and the option refresh (§8.6) builds the new value from them.
 
+Tool groups may declare `files`, a list of repo-relative `fnmatch` patterns such as `["*.yaml", "*.yml"]`.
+At least one rendered file must match; `*` also matches path separators, so `*.py` covers root and nested files.
+The candidate paths include sink outputs and `.config/tmpl.toml`, but not unrelated files on disk. They are
+computed with every optional tool group empty, so a tool's own configuration cannot make its group applicable.
+Unavailable groups are not asked or stored, and explicit answers for them are refused. Templates see them as
+empty tool tables. Only `tools` options can declare `files` or `default_by_layer`.
+
+`default_by_layer` maps selected layer IDs to alternative defaults; the first matching entry wins, otherwise
+`default` applies. For example, a YAML formatter group can use
+`default = { yamlfmt = "pre-commit" }` and
+`default_by_layer = { "lang/ts" = { prettier = "pre-commit" } }`. A saved answer, including `none`, wins over
+either default even when the selected layers change. Individual new tool groups remain evaluations in `TODO.md`;
+the shipped Python checker group uses `files = ["*.py"]`.
+
 ### 4.2 Support matrix (kind × lang)
 
 Cells hold the kind-specific default (alternatives after `·`, all selectable as unit options). `–` means not offered. Every kind is in the initial implementation scope.
@@ -315,7 +329,10 @@ Every mutating command refuses to run on a dirty worktree (`--allow-dirty` overr
 ### 8.1 `tmpl init [PATH]`
 
 1. Create the directory, `git init`, and make an empty initial commit.
-2. Collect root options, then units (`--unit python:cli@.`, repeatable; interactive otherwise) and options (`--opt key=value`).
+2. Collect units (`--unit python:cli@.`, repeatable; interactive otherwise) and options (`--opt key=value`). Without
+   `--unit`, ask each applicable tool group not already answered by `--opt`, showing choices, stages and its resolved
+   default. Blank input accepts the default; `none` disables the group; invalid answers are explained and retried.
+   With `--unit`, initialization is noninteractive and stores applicable defaults for unanswered options.
 3. Write the manifest, reconcile with base = ∅, force-add `third_party/.gitkeep`.
 4. Run setup (§8.9) unless `--no-setup`.
 5. Commit the scaffold.
@@ -349,7 +366,11 @@ Attaches a feature to or detaches it from the root (no `PATH`) or the unit at `P
 
 Bumps `version` (default: the latest `vX.Y.Z` tag in `source`, read with `git ls-remote`) and reconciles. The target release does the work: when it isn't the running one, tmpl runs `uvx --no-config --from <source>@v<VERSION> tmpl update --to <VERSION>` (`tmpl sync` for releases before 0.4.0, which lack `update`), passing `--prefer`, `--dry-run` and `--allow-dirty` on. The base is still rendered by the release that applied the manifest (§10).
 
-Options follow the target release. Ones it declares that the manifest lacks are stored with their defaults, or built from the options they replace (§4.1), and ones it no longer declares are dropped. Each is printed (`new  [root] key = value`, `dropped  [unit apps/tool] key = value`). Stored values are never changed, so a changed default reaches only options added by the update. Every option has a default, so update asks nothing.
+Options follow the target release. Applicable ones it declares that the manifest lacks are stored with their
+layer-dependent defaults, or built from the options they replace (§4.1). Options it no longer declares, and tool
+groups with no matching rendered file, are dropped. Each is printed (`new  [root] key = value`,
+`dropped  [unit apps/tool] key = value`). Saved answers for still-applicable options are never changed, so a changed
+default reaches only newly added options. Every option has a default, so update asks nothing.
 
 Every change (`add`, `remove`, `set`, `feature`) stamps the running release as `version` and refreshes options the same way, so the manifest always holds the options of the release it names. `sync` applies the manifest as it stands and refreshes nothing. Only `update` reconciles a manifest whose `version` is later than the running release; every other reconcile refuses it rather than drop the later release's options.
 
@@ -452,6 +473,7 @@ source_pattern = '(\d+\.\d+)'
 [options.type_checkers]
 scope = "lang"
 type = "tools"                  # tool → stage (§4.1)
+files = ["*.py"]                # includes nested paths (§4.1)
 choices = ["basedpyright", "pyright", "ty", "mypy"]
 default = { basedpyright = "pre-commit", mypy = "pre-push" }
 replaces = { type_checker_fast = "pre-commit", type_checker_thorough = "pre-push" }

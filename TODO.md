@@ -11,8 +11,8 @@ tools, each at its own stage, or `none`. For example, any template with a YAML f
 
 The defaults are `yamllint` and `yamlfmt`, or `yamllint` and `prettier` when a JS/TS template is selected.
 
-- [ ] Ask a tool group only when the selected layers render a file it checks, with defaults that can depend on other
-      layers (`prettier` as the formatter when a JS/TS layer is present).
+The selection machinery supports rendered-file filters and layer-dependent defaults (SPECS §4.1). Interactive
+`init` asks applicable tool groups; `--unit` uses defaults and `--opt` overrides. Evaluate and add the groups below.
 
 ### Python (`lang/python`)
 

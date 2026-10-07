@@ -13,6 +13,7 @@ source_pattern = '(\d+\.\d+)'
 [options.type_checkers]
 scope = "lang"
 type = "tools"
+files = ["*.py"]
 choices = ["basedpyright", "pyright", "ty", "mypy"]
 default = { basedpyright = "pre-commit", mypy = "pre-push" }
 replaces = { type_checker_fast = "pre-commit", type_checker_thorough = "pre-push" }

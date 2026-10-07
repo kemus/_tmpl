@@ -16,9 +16,10 @@ from cyclopts import App, Parameter
 
 from tmpl import __version__, catalog, convert, git, manifest, proc, reconcile, setup
 from tmpl.detect import DetectError, detect
+from tmpl.docs import is_map
 from tmpl.manifest import Manifest, Options, Unit
 from tmpl.merge import Prefer
-from tmpl.render import RenderedFile, RenderError, Tree, render
+from tmpl.render import RenderedFile, RenderError, Tree, option_context, render
 
 RENDER_INDEX = ".tmpl-render.json"
 VERSIONLESS = f"{manifest.MANIFEST_PATH} has no version yet (from `adopt --plan`); edit it, then run `tmpl sync`"
@@ -137,19 +138,55 @@ def _new_manifest(repo: Path, units: list[Unit], given: dict[str, object]) -> Ma
         return picked
 
     root_specs = catalog.root_options([])
-    created = Manifest(root=catalog.resolve(root_specs, take(root_specs), repo).stored)
+    created = Manifest(root=take(root_specs), unit=units)
     for lang in dict.fromkeys(u.lang for u in units):
         specs = catalog.lang_options(lang, [])
-        if stored := catalog.resolve(specs, take(specs), repo).stored:
-            created.lang[lang] = stored
+        created.lang[lang] = take(specs)
     for unit in units:
         specs = catalog.unit_options(unit.lang, unit.kind, unit.features)
-        unit.options = catalog.resolve(specs, take(specs), repo / unit.path).stored
-        created.unit.append(unit)
+        unit.options = take(specs)
     if unknown := sorted(set(given) - claimed):
         msg = f"unknown options for these units: {unknown}"
         raise UsageError(msg)
+    context = option_context(created, repo.name, repo)
+    created.root = catalog.resolve(root_specs, created.root, repo, context).stored
+    for lang in created.langs:
+        specs = catalog.lang_options(lang, [])
+        created.lang[lang] = catalog.resolve(specs, created.lang[lang], repo, context).stored
+    for unit in units:
+        specs = catalog.unit_options(unit.lang, unit.kind, unit.features)
+        unit.options = catalog.resolve(specs, unit.options, repo / unit.path, context).stored
     return created
+
+
+def _prompt_tools(created: Manifest, given: dict[str, object], repo: Path) -> None:
+    """Interactive init asks only applicable tool groups without an explicit --opt answer."""
+    context = option_context(created, repo.name, repo)
+    scopes = [("root", created.root, catalog.root_options(created.features))]
+    scopes += [
+        (lang, created.lang[lang], catalog.lang_options(lang, created.lang_features(lang))) for lang in created.langs
+    ]
+    scopes += [
+        (unit.path, unit.options, catalog.unit_options(unit.lang, unit.kind, unit.features)) for unit in created.unit
+    ]
+    for scope, table, specs in scopes:
+        for name, spec in specs.items():
+            if spec.type != "tools" or name in given or not spec.available(context):
+                continue
+            value = table.get(name, {})
+            default = ",".join(f"{tool}:{stage}" for tool, stage in value.items()) if is_map(value) else ""
+            choices = ", ".join(map(str, spec.choices or []))
+            prompt = (
+                f"{scope}: {name.replace('_', ' ')} ({choices}, or none; "
+                f"tool[:pre-commit|pre-push|ci]) [{default or 'none'}]: "
+            )
+            while answer := input(prompt).strip():
+                try:
+                    table[name] = spec.coerce(name, answer)
+                except ValueError as exc:
+                    _err(str(exc))
+                else:
+                    break
 
 
 @app.command
@@ -167,7 +204,7 @@ def init(
     path
         Directory to create (it may exist if empty).
     unit
-        LANG:KIND[@PATH], repeatable. Asked for when omitted.
+        LANG:KIND[@PATH], repeatable. When omitted, ask for units and applicable tool groups.
     opt
         KEY=VALUE for any root, language or unit option, repeatable.
     no_setup
@@ -187,6 +224,8 @@ def init(
             raise UsageError(_overlap_text(parsed.path, other))
     given = _parse_opts(opt or [])
     created = _new_manifest(repo, units, given)
+    if not unit:
+        _prompt_tools(created, given, repo)
     created.version = __version__
 
     repo.mkdir(parents=True, exist_ok=True)
@@ -332,8 +371,11 @@ def _refresh_options(repo: Path, current: Manifest) -> None:
     """Store the options this version declares: new ones at their defaults, or built from the options they replace,
     and undeclared ones dropped (§8.6)."""
 
+    context = option_context(current, repo.name, repo)
+
     def refresh(where: str, specs: dict[str, catalog.OptionSpec], given: dict[str, object], live: Path) -> Options:
-        stored = catalog.resolve(specs, _picked(catalog.migrate(specs, given), specs), live).stored
+        available = {k: s for k, s in specs.items() if s.available(context)}
+        stored = catalog.resolve(specs, _picked(catalog.migrate(specs, given), available), live, context).stored
         for key in sorted(stored.keys() - given.keys()):
             _out(f"     new  {where} {key} = {stored[key]!r}")
         for key in sorted(given.keys() - stored.keys()):
@@ -423,10 +465,14 @@ def add(spec: str, *, opt: list[str] | None = None, repo: Path = Path(), opts: R
             hint = "" if new_lang else f"; set {unit.lang} options with `tmpl set`"
             msg = f"unknown options for this unit: {unknown}{hint}"
             raise UsageError(msg)
-        unit.options = catalog.resolve(unit_specs, _picked(given, unit_specs), root / unit.path).stored
-        if lang_specs and (stored := catalog.resolve(lang_specs, _picked(given, lang_specs), root).stored):
-            current.lang[unit.lang] = stored
+        unit.options = _picked(given, unit_specs)
+        if lang_specs:
+            current.lang[unit.lang] = _picked(given, lang_specs)
         current.unit.append(unit)
+        context = option_context(current, root.name, root)
+        # Reject explicitly requested groups that have no matching file before refresh drops inactive options.
+        catalog.resolve(unit_specs, unit.options, root / unit.path, context)
+        catalog.resolve(lang_specs, _picked(given, lang_specs), root, context)
 
     return _reconcile(root, opts or Reconcile(), change)
 
@@ -476,9 +522,12 @@ def set_cmd(*pairs: str, unit: str | None = None, repo: Path = Path(), opts: Rec
         raise UsageError(msg)
 
     def change(current: Manifest) -> None:
+        selected: dict[str, catalog.OptionSpec] = {}
         for key, value in given.items():
             table, spec = _option_table(current, key, unit)
             table[key] = spec.coerce(key, value)
+            selected[key] = spec
+        _check_tool_files(current, repo, selected)
 
     return _reconcile(repo.resolve(), opts or Reconcile(), change)
 
@@ -525,7 +574,7 @@ def feature_add(
             unit.features.append(feature)
         else:
             current.features = [*attached, feature]
-        _set_feature_options(current, feature, unit, given)
+        _set_feature_options(current, feature, unit, given, root)
 
     return _reconcile(root, opts or Reconcile(), change)
 
@@ -566,7 +615,13 @@ def _where(unit: Unit | None) -> str:
     return f"the unit at {unit.path}" if unit else "the root"
 
 
-def _set_feature_options(current: Manifest, feature: str, unit: Unit | None, given: dict[str, object]) -> None:
+def _set_feature_options(
+    current: Manifest,
+    feature: str,
+    unit: Unit | None,
+    given: dict[str, object],
+    repo: Path,
+) -> None:
     """Store each of `given` in the table of the scope that declares it among `feature`'s layers."""
     langs = [unit.lang] if unit else current.langs
     scopes: list[tuple[Callable[[], Options], dict[str, catalog.OptionSpec]]] = [
@@ -578,6 +633,7 @@ def _set_feature_options(current: Manifest, feature: str, unit: Unit | None, giv
         (partial(current.lang.setdefault, lang, {}), catalog.options_for([f"lang/{lang}/feature/{feature}"], "lang"))
         for lang in langs
     ]
+    selected: dict[str, catalog.OptionSpec] = {}
     for key, value in given.items():
         found = [(table, spec) for table, specs in scopes if (spec := specs.get(key))]
         if not found:
@@ -588,6 +644,17 @@ def _set_feature_options(current: Manifest, feature: str, unit: Unit | None, giv
             msg = f"option {key!r} is read from {spec.source}; edit that instead"
             raise UsageError(msg)
         table()[key] = spec.coerce(key, value)
+        selected[key] = spec
+    _check_tool_files(current, repo, selected)
+
+
+def _check_tool_files(current: Manifest, repo: Path, specs: dict[str, catalog.OptionSpec]) -> None:
+    repo = repo.resolve()
+    context = option_context(current, repo.name, repo)
+    for key, spec in specs.items():
+        if not spec.available(context):
+            msg = f"option {key}: no rendered file matches {spec.files}"
+            raise UsageError(msg)
 
 
 def _picked(given: dict[str, object], specs: dict[str, catalog.OptionSpec]) -> dict[str, object]:

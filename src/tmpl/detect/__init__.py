@@ -10,7 +10,8 @@ import attrs
 from tmpl import catalog, git
 from tmpl.detect import python
 from tmpl.docs import is_map, is_seq
-from tmpl.manifest import Manifest, Options, Unit, overlap
+from tmpl.manifest import Manifest, Options, overlap
+from tmpl.render import option_context
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -59,18 +60,18 @@ def detect(repo: Path) -> Detected:
 
     lang_given = {"python": found.lang_options}
     root_given = _root_options(repo)
-    manifest = Manifest(root={}, lang={}, unit=[])
-    manifest.root = catalog.resolve(catalog.root_options([]), root_given, repo).stored
+    manifest = Manifest(root=root_given, lang=lang_given, unit=found.units)
+    context = option_context(manifest, repo.name, repo)
+    manifest.root = catalog.resolve(catalog.root_options([]), root_given, repo, context).stored
+    manifest.lang = {}
     for lang, given in lang_given.items():
         specs = catalog.lang_options(lang, [])
-        stored = catalog.resolve(specs, given, repo).stored
+        stored = catalog.resolve(specs, given, repo, context).stored
         if stored:
             manifest.lang[lang] = stored
-    for unit in found.units:
+    for unit in manifest.unit:
         specs = catalog.unit_options(unit.lang, unit.kind, [])
-        manifest.unit.append(
-            Unit(unit.path, unit.lang, unit.kind, options=catalog.resolve(specs, {}, repo / unit.path).stored),
-        )
+        unit.options = catalog.resolve(specs, {}, repo / unit.path, context).stored
     return Detected(manifest, warnings)
 
 

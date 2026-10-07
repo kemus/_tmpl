@@ -62,9 +62,14 @@ def slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
 
-def instances(manifest: Manifest, repo_name: str, live_root: Path | None) -> list[Instance]:
+def instances(
+    manifest: Manifest,
+    repo_name: str,
+    live_root: Path | None,
+    context: catalog.OptionContext | None = None,
+) -> list[Instance]:
     root_features = manifest.features
-    root_values = catalog.resolve(catalog.root_options(root_features), manifest.root_options, live_root).values
+    root_values = catalog.resolve(catalog.root_options(root_features), manifest.root_options, live_root, context).values
     root_ctx = {"repo_name": repo_name, "tmpl_spec": manifest.spec, **root_values}
     out: list[Instance] = []
 
@@ -85,7 +90,7 @@ def instances(manifest: Manifest, repo_name: str, live_root: Path | None) -> lis
         first = next(u for u in manifest.unit if u.lang == lang)
         live = live_root / first.path if live_root else None
         specs = catalog.lang_options(lang, manifest.lang_features(lang))
-        lang_ctx[lang] = {**root_ctx, **catalog.resolve(specs, manifest.lang.get(lang, {}), live).values}
+        lang_ctx[lang] = {**root_ctx, **catalog.resolve(specs, manifest.lang.get(lang, {}), live, context).values}
         add(f"lang/{lang}", ".", lang_ctx[lang])
         for feature in root_features:
             add(f"lang/{lang}/feature/{feature}", ".", lang_ctx[lang])
@@ -96,7 +101,7 @@ def instances(manifest: Manifest, repo_name: str, live_root: Path | None) -> lis
         layer_ids = catalog.unit_layer_ids(unit.lang, unit.kind)
         live = live_root / unit.path if live_root else None
         specs = catalog.unit_options(unit.lang, unit.kind, unit.features)
-        values = catalog.resolve(specs, unit.options, live).values
+        values = catalog.resolve(specs, unit.options, live, context).values
         name = str(values.get("name") or default_name(unit, repo_name))
         info = {"path": unit.path, "lang": unit.lang, "kind": unit.kind, "name": name, "slug": slug(name)}
         ctx = {**lang_ctx[unit.lang], **values, "unit": info}
@@ -145,11 +150,48 @@ def _render_data(env: jinja2.Environment, value: object, ctx: dict[str, object])
 
 def render(manifest: Manifest, repo_name: str, live_root: Path | None = None, *, base: bool = False) -> Tree:
     """`base`: render the base side of a 3-way merge, with derived data as the last reconcile wrote it."""
+    context = option_context(manifest, repo_name, live_root)
+    return _render(manifest, repo_name, live_root, context, base=base)
+
+
+def option_context(manifest: Manifest, repo_name: str, live_root: Path | None = None) -> catalog.OptionContext:
+    """Discover the selected layers' files with tool groups empty, so a tool cannot enable itself."""
+
+    def without_tools(given: dict[str, object], specs: dict[str, catalog.OptionSpec]) -> dict[str, object]:
+        picked = {k: v for k, v in given.items() if k in specs}
+        return {**picked, **{k: {} for k, s in specs.items() if s.type == "tools"}}
+
+    root = without_tools(manifest.root_options, catalog.root_options(manifest.features))
+    if manifest.features:
+        root["features"] = manifest.features
+    lang = {
+        name: without_tools(manifest.lang.get(name, {}), catalog.lang_options(name, manifest.lang_features(name)))
+        for name in manifest.langs
+    }
+    units = [
+        attrs.evolve(u, options=without_tools(u.options, catalog.unit_options(u.lang, u.kind, u.features)))
+        for u in manifest.unit
+    ]
+    bare = attrs.evolve(manifest, root=root, lang=lang, unit=units)
+    tree = _render(bare, repo_name, live_root, None, base=True)
+    layers = frozenset(inst.layer.id for inst in instances(bare, repo_name, live_root))
+    # The manifest is written by the CLI, alongside the rendered tree.
+    return catalog.OptionContext(frozenset({*tree, ".config/tmpl.toml"}), layers)
+
+
+def _render(
+    manifest: Manifest,
+    repo_name: str,
+    live_root: Path | None,
+    context: catalog.OptionContext | None,
+    *,
+    base: bool,
+) -> Tree:
     tree: Tree = {}
     frags: dict[str, list[tuple[int, int, sinks.Frag]]] = {}
     patches: list[tuple[str, dict[str, object]]] = []
     root_ctx: dict[str, object] = {}
-    for index, inst in enumerate(instances(manifest, repo_name, live_root)):
+    for index, inst in enumerate(instances(manifest, repo_name, live_root, context)):
         env = _env(inst.layer)
         if inst.layer.id == "root":
             root_ctx = inst.context
