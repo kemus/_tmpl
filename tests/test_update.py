@@ -56,6 +56,18 @@ def test_update_drops_undeclared_options(tmp_path: Path, capsys: pytest.CaptureF
     assert recorded(repo) == clean
 
 
+def test_update_migrates_the_type_checker_slots(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = new_repo(tmp_path, "python:lib")
+    edited = recorded(repo)
+    edited.lang["python"] = {"type_checker_fast": "ty", "type_checker_thorough": "none"}
+    manifest.dump(repo, edited)
+    commit_all(repo, "hand edit")
+    capsys.readouterr()
+    assert run("update", str(repo), "--to", __version__) == 0
+    assert "     new  [lang.python] type_checkers = {'ty': 'pre-commit'}" in capsys.readouterr().out
+    assert recorded(repo).lang["python"] == {"type_checkers": {"ty": "pre-commit"}}
+
+
 def test_update_to_another_release_runs_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo = new_repo(tmp_path, "python:lib")
     calls: list[tuple[str, ...]] = []

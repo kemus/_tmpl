@@ -329,10 +329,11 @@ def _latest_release(repo: Path, source: str) -> tuple[int, ...]:
 
 
 def _refresh_options(repo: Path, current: Manifest) -> None:
-    """Store the options this version declares: new ones at their defaults, undeclared ones dropped (§8.6)."""
+    """Store the options this version declares: new ones at their defaults, or built from the options they replace,
+    and undeclared ones dropped (§8.6)."""
 
     def refresh(where: str, specs: dict[str, catalog.OptionSpec], given: dict[str, object], live: Path) -> Options:
-        stored = catalog.resolve(specs, _picked(given, specs), live).stored
+        stored = catalog.resolve(specs, _picked(catalog.migrate(specs, given), specs), live).stored
         for key in sorted(stored.keys() - given.keys()):
             _out(f"     new  {where} {key} = {stored[key]!r}")
         for key in sorted(given.keys() - stored.keys()):

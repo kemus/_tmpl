@@ -48,10 +48,10 @@ UNITS = {
 }
 
 CHECKERS = {
-    "llmstxt-scraper": {"type_checker_fast": "basedpyright", "type_checker_thorough": "mypy"},
-    "kupdate": {"type_checker_fast": "basedpyright", "type_checker_thorough": "mypy"},
-    "ai-sessions": {"type_checker_fast": "basedpyright", "type_checker_thorough": "mypy"},
-    "uv-workspace": {"type_checker_fast": "ty", "type_checker_thorough": "none"},
+    "llmstxt-scraper": {"type_checkers": {"basedpyright": "pre-commit", "mypy": "pre-push"}},
+    "kupdate": {"type_checkers": {"basedpyright": "pre-commit", "mypy": "pre-push"}},
+    "ai-sessions": {"type_checkers": {"basedpyright": "pre-commit", "mypy": "pre-push"}},
+    "uv-workspace": {"type_checkers": {"ty": "pre-commit"}},
 }
 
 

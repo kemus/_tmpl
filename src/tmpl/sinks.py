@@ -24,6 +24,12 @@ HK_VERSION = "2.1.0"
 HK_PACKAGE = f"package://github.com/jdx/hk/releases/download/v{HK_VERSION}/hk@{HK_VERSION}#"
 HK_HOOKS = ("pre-commit", "pre-push", "fix", "check")
 FIXING_HOOKS = ("pre-commit", "fix")
+# A step's `stage` (§5.3) → the hooks it joins, and whether it is slow (in `check` only under the slow profile).
+STAGE_HOOKS: dict[str, tuple[list[str], bool]] = {
+    "pre-commit": (["pre-commit", "check"], False),
+    "pre-push": (["pre-push", "check"], True),
+    "ci": (["check"], True),
+}
 
 
 @attrs.frozen
@@ -118,7 +124,7 @@ def _pkl(value: str) -> str:
 
 
 def hk(frags: list[Frag], _ctx: dict[str, object]) -> list[SinkFile]:
-    steps = [_str_map(f.data) for f in frags]
+    steps = [_staged(_str_map(f.data)) for f in frags]
     lines = [
         f'amends "{HK_PACKAGE}/Config.pkl"',
         f'import "{HK_PACKAGE}/Builtins.pkl"',
@@ -155,6 +161,18 @@ def hk(frags: list[Frag], _ctx: dict[str, object]) -> list[SinkFile]:
         lines += ["    }", "  }"]
     lines.append("}")
     return [SinkFile(".config/hk.pkl", "\n".join(lines) + "\n")]
+
+
+def _staged(step: dict[str, object]) -> dict[str, object]:
+    """Expand a step's `stage` into its `hooks` and `slow`."""
+    stage = step.pop("stage", None)
+    if stage is None:
+        return step
+    if stage not in STAGE_HOOKS:
+        msg = f"hk step {step.get('name')!r}: unknown stage {stage!r}; expected one of {list(STAGE_HOOKS)}"
+        raise ValueError(msg)
+    hooks, slow = STAGE_HOOKS[str(stage)]
+    return {**step, "hooks": hooks, **({"slow": True} if slow else {})}
 
 
 def ci(frags: list[Frag], _ctx: dict[str, object]) -> list[SinkFile]:

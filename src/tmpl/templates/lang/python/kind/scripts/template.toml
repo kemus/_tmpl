@@ -40,20 +40,20 @@ data.tool.pytest.ini_options = { pythonpath = ["{{ unit.path }}"] }
 
 [[fragment]]
 sink = "workspace.python"
-when = "{{ importable and 'basedpyright' in (type_checker_fast, type_checker_thorough) }}"
+when = "{{ importable and 'basedpyright' in type_checkers }}"
 data.tool.basedpyright = { extraPaths = ["{{ unit.path }}"] }
 
 [[fragment]]
 sink = "workspace.python"
-when = "{{ importable and 'pyright' in (type_checker_fast, type_checker_thorough) }}"
+when = "{{ importable and 'pyright' in type_checkers }}"
 data.tool.pyright = { extraPaths = ["{{ unit.path }}"] }
 
 [[fragment]]
 sink = "workspace.python"
-when = "{{ importable and 'mypy' in (type_checker_fast, type_checker_thorough) }}"
+when = "{{ importable and 'mypy' in type_checkers }}"
 data.tool.mypy = { mypy_path = ["{{ unit.path }}"] }
 
 [[fragment]]
 sink = "workspace.python"
-when = "{{ importable and 'ty' in (type_checker_fast, type_checker_thorough) }}"
+when = "{{ importable and 'ty' in type_checkers }}"
 data.tool.ty.environment = { extra-paths = ["{{ unit.path }}"] }

@@ -34,7 +34,7 @@ def test_adopt_detects_and_preserves(repo: Path) -> None:
     assert recorded is not None
     assert recorded.root["author"] == "Legacy Author"
     assert recorded.root["max_line_length"] == 100
-    assert recorded.lang["python"] == {"type_checker_fast": "mypy", "type_checker_thorough": "none"}
+    assert recorded.lang["python"] == {"type_checkers": {"mypy": "pre-commit"}}
     assert [(u.path, u.lang, u.kind) for u in recorded.unit] == [(".", "python", "cli")]
 
     pyproject = tomllib.loads((repo / "pyproject.toml").read_text())

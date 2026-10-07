@@ -9,24 +9,18 @@ default = "3.14"
 source = "pyproject.toml:project.requires-python"
 source_pattern = '(\d+\.\d+)'
 
-[options.type_checker_fast]
+# Each chosen checker runs at its stage: pre-commit (and `check`), pre-push (and CI), or CI only.
+[options.type_checkers]
 scope = "lang"
-choices = ["basedpyright", "pyright", "ty", "mypy", "none"]
-default = "basedpyright"
+type = "tools"
+choices = ["basedpyright", "pyright", "ty", "mypy"]
+default = { basedpyright = "pre-commit", mypy = "pre-push" }
+replaces = { type_checker_fast = "pre-commit", type_checker_thorough = "pre-push" }
 
-[options.type_checker_thorough]
-scope = "lang"
-choices = ["basedpyright", "pyright", "ty", "mypy", "none"]
-default = "mypy"
-
-# Checker → hk step. Builtins exist for ty and mypy; the pyrights need a custom step.
-[vars.checker_builtin]
-ty = "ty"
-mypy = "mypy"
-
-[vars.checker_cmd]
-basedpyright = "basedpyright"
-pyright = "pyright"
+[vars.stage_labels]
+pre-commit = "pre-commit"
+pre-push = "pre-push / CI"
+ci = "CI"
 
 [[fragment]]
 sink = "mise.tools"
@@ -53,17 +47,30 @@ sink = "hk.steps"
 order = 21
 data = { name = "ruff", builtin = "ruff", hooks = ["pre-commit", "check", "fix"] }
 
+# One step per checker. Builtins exist for ty and mypy; the pyrights need a custom step.
 [[fragment]]
 sink = "hk.steps"
 order = 40
-when = "{{ type_checker_fast != 'none' }}"
-data = { name = "{{ type_checker_fast }}", builtin = "{{ checker_builtin.get(type_checker_fast, '') }}", glob = "{{ '' if type_checker_fast in checker_builtin else '**/*.py' }}", check = "{{ checker_cmd.get(type_checker_fast, '') }}", hooks = ["pre-commit", "check"] }
+when = "{{ 'basedpyright' in type_checkers }}"
+data = { name = "basedpyright", glob = "**/*.py", check = "basedpyright", stage = "{{ type_checkers.basedpyright }}" }
 
 [[fragment]]
 sink = "hk.steps"
 order = 41
-when = "{{ type_checker_thorough not in ('none', type_checker_fast) }}"
-data = { name = "{{ type_checker_thorough }}", builtin = "{{ checker_builtin.get(type_checker_thorough, '') }}", glob = "{{ '' if type_checker_thorough in checker_builtin else '**/*.py' }}", check = "{{ checker_cmd.get(type_checker_thorough, '') }}", hooks = ["pre-push", "check"], slow = true }
+when = "{{ 'pyright' in type_checkers }}"
+data = { name = "pyright", glob = "**/*.py", check = "pyright", stage = "{{ type_checkers.pyright }}" }
+
+[[fragment]]
+sink = "hk.steps"
+order = 42
+when = "{{ 'ty' in type_checkers }}"
+data = { name = "ty", builtin = "ty", stage = "{{ type_checkers.ty }}" }
+
+[[fragment]]
+sink = "hk.steps"
+order = 43
+when = "{{ 'mypy' in type_checkers }}"
+data = { name = "mypy", builtin = "mypy", stage = "{{ type_checkers.mypy }}" }
 
 # Unless a package sits at `.`, the root pyproject holds the dev tools and checker config.
 [[fragment]]
@@ -72,25 +79,25 @@ data.root."dependency-groups".dev = ["pytest", "ruff"]
 
 [[fragment]]
 sink = "workspace.python"
-when = "{{ 'basedpyright' in (type_checker_fast, type_checker_thorough) }}"
+when = "{{ 'basedpyright' in type_checkers }}"
 data.root."dependency-groups".dev = ["basedpyright"]
 data.root.tool.basedpyright = { typeCheckingMode = "strict", venvPath = ".", venv = ".venv" }
 
 [[fragment]]
 sink = "workspace.python"
-when = "{{ 'pyright' in (type_checker_fast, type_checker_thorough) }}"
+when = "{{ 'pyright' in type_checkers }}"
 data.root."dependency-groups".dev = ["pyright"]
 data.root.tool.pyright = { typeCheckingMode = "strict", venvPath = ".", venv = ".venv" }
 
 [[fragment]]
 sink = "workspace.python"
-when = "{{ 'mypy' in (type_checker_fast, type_checker_thorough) }}"
+when = "{{ 'mypy' in type_checkers }}"
 data.root."dependency-groups".dev = ["mypy"]
 data.root.tool.mypy = { strict = true }
 
 [[fragment]]
 sink = "workspace.python"
-when = "{{ 'ty' in (type_checker_fast, type_checker_thorough) }}"
+when = "{{ 'ty' in type_checkers }}"
 data.root."dependency-groups".dev = ["ty"]
 
 [[fragment]]
@@ -108,4 +115,4 @@ sink = "agents.sections"
 order = 20
 data = { title = "Python", body = """
 - Dependencies and environments via `uv`; run tools with `mise exec -- uv run <tool>`.
-- Lint/format: ruff. Types: {{ type_checker_fast }}{% if type_checker_thorough not in ('none', type_checker_fast) %} (fast), {{ type_checker_thorough }} (pre-push / CI){% endif %}. Tests: pytest.""" }
+- Lint/format: ruff. Types: {% for tool, stage in type_checkers.items() %}{{ tool }} ({{ stage_labels[stage] }}){% if not loop.last %}, {% endif %}{% else %}none{% endfor %}. Tests: pytest.""" }

@@ -113,8 +113,7 @@ sync_check = true                 # hk step running `tmpl sync --check` (§8.7)
 features = ["deps-update", "security-scan"]
 
 [lang.python]                     # lang-scoped options: once per repo per language
-type_checker_fast = "basedpyright"
-type_checker_thorough = "mypy"
+type_checkers = { basedpyright = "pre-commit", mypy = "pre-push" }   # tool → stage (§4.1)
 # python_version: live-sourced, not stored
 
 [lang.ts]
@@ -150,7 +149,7 @@ kind = "scripts"
 
 | Lang | Toolchain (mise) | Lint / format | Test (default · alternatives) | Other options (default) | Workspace |
 |---|---|---|---|---|---|
-| python | python, uv | ruff, ruff format | pytest | version (live); type checkers: fast = basedpyright (check + pre-commit), thorough = mypy (pre-push + CI); either slot accepts basedpyright · pyright · ty · mypy · none | uv workspace |
+| python | python, uv | ruff, ruff format | pytest | version (live); type checkers (basedpyright at pre-commit, mypy at pre-push; any of basedpyright · pyright · ty · mypy, each at its stage, or none) | uv workspace |
 | go | go | golangci-lint, gofmt | go test | — | go.work |
 | rust | rust, cargo-nextest | clippy, rustfmt | nextest (+ `cargo test --doc`) · cargo test | — | cargo workspace |
 | bash | bash, shellcheck, shfmt, shellspec | shellcheck, shfmt | shellspec · bats | — | none |
@@ -161,7 +160,7 @@ kind = "scripts"
 
 Options are validated against each other (e.g. `test = "bun test"` requires `package_manager = "bun"`).
 
-The two Python type-checker slots map to hk hooks: the fast slot runs in `check` and `pre-commit`; the thorough slot runs in `pre-push` and in CI (`mise run check` in CI enables it through an hk profile).
+Tool options (`type = "tools"`) pick any number of their choices, each at a stage: `pre-commit` runs it in `pre-commit` and `check`; `pre-push` runs it in `pre-push` and in CI (`mise run check` in CI enables it through an hk profile); `ci` runs it in CI only. The manifest stores a table of tool → stage; `set` and `--opt` take `tool[:stage],…` (the stage defaults to `pre-commit`), or `none` for no tool. `type_checkers` replaced the single-choice `type_checker_fast` and `type_checker_thorough` options: an option's `replaces` table names the options it took over and the stage each one's tool gets, and the option refresh (§8.6) builds the new value from them.
 
 ### 4.2 Support matrix (kind × lang)
 
@@ -217,7 +216,7 @@ Layers never template shared files directly. They declare **fragments** (data) a
 | Sink | File | Fragment shape | Extension point for user additions |
 |---|---|---|---|
 | `mise.tools` / `mise.env` / `mise.tasks` | `.config/mise/config.toml` | key → value / task table | `.config/mise/conf.d/*.toml`, task files in `.config/mise/tasks/` |
-| `hk.steps` | `.config/hk.pkl` | `{name, builtin?, glob?, check?, fix?, hooks, slow?}` | none: edit `hk.pkl` directly; updates arrive through 3-way text merge |
+| `hk.steps` | `.config/hk.pkl` | `{name, builtin?, glob?, check?, fix?, hooks, slow?}`, or `stage` (§4.1) in place of `hooks` and `slow` | none: edit `hk.pkl` directly; updates arrive through 3-way text merge |
 | `ci.steps` | `.github/workflows/ci.yml` | step objects | additional workflow files |
 | `gitignore` | root `.gitignore` or `<unit>/.gitignore` | lines, grouped by heading | extra lines (line-set merge, §7.3) |
 | `editorconfig` | `.editorconfig` | `{glob: {key: value}}` | extra sections (structured merge) |
@@ -235,7 +234,7 @@ Layers never template shared files directly. They declare **fragments** (data) a
 - **Importable scripts:** a python `scripts` unit's `importable` option (default `false`) lets tests `import` its scripts as top-level modules. It adds the unit's directory to pytest's `pythonpath` and to each chosen checker's search path (`extraPaths`, `mypy_path`, `environment.extra-paths`) in the root `pyproject.toml`, whatever its shape (virtual workspace root, root package, or non-package root), since pytest and the checkers run from the root. It is off by default because each script then shadows any module of the same name and importing one runs its top level.
 - **Tasks contract:** every language contributes `lint`, `fmt`, and `test` tasks namespaced by language (`test:python`). The root defines `check` (`hk check --all`, depending on `test:*`) and `fix` (`hk fix --all`). CI runs `mise run check` in one job with `HK_PROFILE=slow`.
 - **Tool resolution:** hk 2.1 builtins run structured argv and reject a shell `prefix`, so steps never wrap commands. Each language puts its tools on `PATH` through mise instead; python contributes `_.python.venv = {path = ".venv", create = true}` to `mise.env`, so ruff and the type checkers resolve from the project venv.
-- **Hooks:** a step lists the hooks it joins. `pre-commit` and `fix` run with `fix = true`; a `slow` step joins `check` only under the `slow` profile (CI), while `pre-push` always runs it.
+- **Hooks:** a step lists the hooks it joins. `pre-commit` and `fix` run with `fix = true`; a `slow` step joins `check` only under the `slow` profile (CI), while `pre-push` always runs it. A step's `stage` sets both: `pre-commit` → `pre-commit` and `check`; `pre-push` → `pre-push` and slow `check`; `ci` → slow `check` alone.
 
 ## 6. Files and policies
 
@@ -350,7 +349,7 @@ Attaches a feature to or detaches it from the root (no `PATH`) or the unit at `P
 
 Bumps `version` (default: the latest `vX.Y.Z` tag in `source`, read with `git ls-remote`) and reconciles. The target release does the work: when it isn't the running one, tmpl runs `uvx --no-config --from <source>@v<VERSION> tmpl update --to <VERSION>` (`tmpl sync` for releases before 0.4.0, which lack `update`), passing `--prefer`, `--dry-run` and `--allow-dirty` on. The base is still rendered by the release that applied the manifest (§10).
 
-Options follow the target release. Ones it declares that the manifest lacks are stored with their defaults, and ones it no longer declares are dropped. Each is printed (`new  [root] key = value`, `dropped  [unit apps/tool] key = value`). Stored values are never changed, so a changed default reaches only options added by the update. Every option has a default, so update asks nothing.
+Options follow the target release. Ones it declares that the manifest lacks are stored with their defaults, or built from the options they replace (§4.1), and ones it no longer declares are dropped. Each is printed (`new  [root] key = value`, `dropped  [unit apps/tool] key = value`). Stored values are never changed, so a changed default reaches only options added by the update. Every option has a default, so update asks nothing.
 
 Every change (`add`, `remove`, `set`, `feature`) stamps the running release as `version` and refreshes options the same way, so the manifest always holds the options of the release it names. `sync` applies the manifest as it stands and refreshes nothing. Only `update` reconciles a manifest whose `version` is later than the running release; every other reconcile refuses it rather than drop the later release's options.
 
@@ -445,13 +444,15 @@ default = "3.14"
 source = "pyproject.toml:project.requires-python"   # live-sourced: read from the repo, never stored
 source_pattern = '(\d+\.\d+)'
 
-[options.type_checker_fast]
+[options.type_checkers]
 scope = "lang"
-choices = ["basedpyright", "pyright", "ty", "mypy", "none"]
-default = "basedpyright"
+type = "tools"                  # tool → stage (§4.1)
+choices = ["basedpyright", "pyright", "ty", "mypy"]
+default = { basedpyright = "pre-commit", mypy = "pre-push" }
+replaces = { type_checker_fast = "pre-commit", type_checker_thorough = "pre-push" }
 
 [vars]                          # constants merged into the render context
-checker_builtin = { ty = "ty", mypy = "mypy" }
+stage_labels = { pre-commit = "pre-commit", pre-push = "pre-push / CI", ci = "CI" }
 
 [[fragment]]
 sink = "mise.tools"
@@ -459,9 +460,9 @@ data = { python = "{{ python_version }}", uv = "latest" }
 
 [[fragment]]
 sink = "hk.steps"
-order = 40                      # sorts within the sink; ties keep layer order
-when = "{{ type_checker_fast != 'none' }}"   # rendered; the fragment applies when it is "True"
-data = { name = "{{ type_checker_fast }}", builtin = "{{ checker_builtin.get(type_checker_fast, '') }}", hooks = ["pre-commit", "check"] }
+order = 43                      # sorts within the sink; ties keep layer order
+when = "{{ 'mypy' in type_checkers }}"   # rendered; the fragment applies when it is "True"
+data = { name = "mypy", builtin = "mypy", stage = "{{ type_checkers.mypy }}" }
 ```
 
 ```toml
@@ -529,7 +530,7 @@ Data values render as Jinja strings; a value that renders to `""` is dropped, wh
 | 15 | Dependency updates | Renovate |
 | 16 | JS fuzzing | Jazzer.js |
 | 17 | tui | stays its own kind |
-| 18 | Python type checking | basedpyright on normal runs (check, pre-commit); mypy on pre-push and CI |
+| 18 | Python type checking | basedpyright on normal runs (check, pre-commit); mypy on pre-push and CI; each checker's stage is configurable |
 | 19 | Rust tests | cargo-nextest (+ doctests via `cargo test --doc`) |
 | 20 | TS lint/format | oxlint + prettier |
 | 21 | JS package manager default | pnpm + node |

@@ -31,7 +31,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"]
-{% set checkers = [type_checker_fast, type_checker_thorough] | unique | reject("equalto", "none") | list %}
+{% set checkers = type_checkers | list %}
 {% if "basedpyright" in checkers %}
 [tool.basedpyright]
 typeCheckingMode = "strict"

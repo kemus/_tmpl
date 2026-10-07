@@ -21,6 +21,9 @@ type Attach = Literal["root", "unit"]
 # "follow": merged like "merge", but with no base (adopt) an existing file is kept, like a seed.
 type Policy = Literal["merge", "seed", "follow"]
 type SetKey = Literal["exact", "requirement"]
+# When a tool of a `tools` option runs: on commit, on push, or only in CI (§5.3).
+type Stage = Literal["pre-commit", "pre-push", "ci"]
+STAGES: tuple[Stage, ...] = ("pre-commit", "pre-push", "ci")
 
 
 @attrs.frozen
@@ -28,12 +31,17 @@ class OptionSpec:
     scope: Scope
     default: object = None
     choices: list[object] | None = None
-    type: Literal["str", "int", "bool"] = "str"
+    # "tools": a multi-select of `choices`, each tool mapped to its stage, e.g. {basedpyright = "pre-commit"}.
+    type: Literal["str", "int", "bool", "tools"] = "str"
+    # Options this one took over: old option → the stage its value gets (`migrate`).
+    replaces: dict[str, Stage] = attrs.field(factory=dict[str, Stage])
     # Live source: "<file relative to the scope's path>:<dotted key>"; never stored (§3.2).
     source: str | None = None
     source_pattern: str | None = None
 
     def coerce(self, name: str, value: object) -> object:
+        if self.type == "tools":
+            return self._tools(name, value)
         if self.type == "int":
             value = int(str(value))
         elif self.type == "bool" and not isinstance(value, bool):
@@ -47,6 +55,25 @@ class OptionSpec:
             msg = f"option {name}={value!r}: expected one of {self.choices}"
             raise ValueError(msg)
         return value
+
+    def _tools(self, name: str, value: object) -> dict[str, str]:
+        """A tool → stage table, in `choices` order; `--opt` text reads `tool[:stage],…` or `none`."""
+        if isinstance(value, str):
+            items = [] if value.strip() in {"", "none"} else value.split(",")
+            pairs = (item.partition(":") for item in items)
+            value = {tool.strip(): stage.strip() or STAGES[0] for tool, _, stage in pairs}
+        if not is_map(value):
+            msg = f"option {name}={value!r}: expected a table of tool = stage"
+            raise ValueError(msg)
+        choices = self.choices or []
+        for tool, stage in value.items():
+            if tool not in choices:
+                msg = f"option {name}: unknown tool {tool!r}; expected some of {choices}"
+                raise ValueError(msg)
+            if stage not in STAGES:
+                msg = f"option {name}: {tool} = {stage!r}; expected a stage of {list(STAGES)}"
+                raise ValueError(msg)
+        return {tool: str(value[tool]) for tool in map(str, choices) if tool in value}
 
 
 @attrs.frozen
@@ -220,6 +247,24 @@ def resolve(specs: dict[str, OptionSpec], given: dict[str, object], live_root: P
         if value is None:
             continue
         out.values[name] = out.stored[name] = spec.coerce(name, value)
+    return out
+
+
+def migrate(specs: dict[str, OptionSpec], given: dict[str, object]) -> dict[str, object]:
+    """`given` with each `tools` option missing from it built from the options it replaces.
+
+    Each replaced option holding a tool (not "none") adds it at that option's stage; the first one wins.
+    """
+    out = dict(given)
+    for name, spec in specs.items():
+        if name in given or not any(old in given for old in spec.replaces):
+            continue
+        tools: dict[str, object] = {}
+        for old, stage in spec.replaces.items():
+            tool = given.get(old)
+            if isinstance(tool, str) and tool != "none":
+                tools.setdefault(tool, stage)
+        out[name] = tools
     return out
 
 

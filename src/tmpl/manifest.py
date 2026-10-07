@@ -12,10 +12,12 @@ import tomlkit
 from tomlkit.items import AoT
 
 from tmpl.convert import structure
-from tmpl.docs import is_seq
+from tmpl.docs import is_map, is_seq
 
 if TYPE_CHECKING:
-    from tomlkit.items import Table
+    from collections.abc import Mapping
+
+    from tomlkit.items import InlineTable, Table
 
 MANIFEST_PATH = Path(".config/tmpl.toml")
 DEFAULT_SOURCE = "git+https://github.com/kemus/_tmpl"
@@ -154,5 +156,13 @@ def dump(repo: Path, manifest: Manifest) -> None:
 def _table(options: Options) -> Table:
     table = tomlkit.table()
     for key, value in options.items():
-        table[key] = value
+        table[key] = _inline(value) if is_map(value) else value
     return table
+
+
+def _inline(value: Mapping[str, object]) -> InlineTable:
+    """Tables inside options (a `tools` option's tool → stage) stay inline: one line per option."""
+    inline = tomlkit.inline_table()
+    for key, item in value.items():
+        inline[key] = item
+    return inline

@@ -133,11 +133,12 @@ def _checkers(data: dict[str, object]) -> set[str]:
 
 
 def _type_checkers(present: set[str]) -> Options:
-    """Map the checkers a project already uses onto the fast/thorough slots; none found → defaults."""
+    """Map the checkers a project already uses onto stages; none found → defaults.
+
+    The first fast checker found runs at pre-commit, and mypy at pre-push beside it, or at pre-commit alone.
+    """
     fast = next((c for c in FAST_CHECKERS if c in present), None)
-    has_mypy = "mypy" in present
-    if fast is None and not has_mypy:
-        return {}
-    if fast is None:
-        return {"type_checker_fast": "mypy", "type_checker_thorough": "none"}
-    return {"type_checker_fast": fast, "type_checker_thorough": "mypy" if has_mypy else "none"}
+    tools = {fast: "pre-commit"} if fast else {}
+    if "mypy" in present:
+        tools["mypy"] = "pre-push" if fast else "pre-commit"
+    return {"type_checkers": tools} if tools else {}

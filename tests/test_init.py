@@ -172,13 +172,13 @@ def test_sync_check_hk_step_runs_the_recorded_release(tmp_path: Path) -> None:
 
 def test_init_routes_options_by_scope(tmp_path: Path) -> None:
     repo = tmp_path / "new-tool"
-    opts = ["--opt", "indent=4", "--opt", "type_checker_fast=ty", "--opt", "description=Does things"]
+    opts = ["--opt", "indent=4", "--opt", "type_checkers=ty,mypy:ci", "--opt", "description=Does things"]
     assert run("init", str(repo), "--unit", "python:cli", *opts, "--no-setup") == 0
     recorded = manifest.load(repo)
     assert recorded is not None
     assert recorded.root["indent"] == "4"
     assert recorded.root["description"] == "Does things"
-    assert recorded.lang["python"]["type_checker_fast"] == "ty"
+    assert recorded.lang["python"]["type_checkers"] == {"ty": "pre-commit", "mypy": "ci"}
     assert "indent_size = 4" in (repo / ".editorconfig").read_text()
 
 

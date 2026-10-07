@@ -13,7 +13,7 @@ from .conftest import write
 MANIFEST = Manifest(
     version="0.1.0",
     root={"description": "Demo tool", "author": "Test User"},
-    lang={"python": {"type_checker_fast": "basedpyright", "type_checker_thorough": "mypy"}},
+    lang={"python": {"type_checkers": {"basedpyright": "pre-commit", "mypy": "pre-push"}}},
     unit=[Unit(".", "python", "cli")],
 )
 
@@ -54,6 +54,22 @@ def test_hk_runs_thorough_checker_only_under_slow_profile() -> None:
     pkl = render(MANIFEST, "demo-tool")[".config/hk.pkl"].content
     assert '["mypy"] = (defs["mypy"]) { profiles = List("slow") }' in pkl
     assert "prefix" not in pkl
+
+
+def hook_steps(pkl: str, hook: str) -> str:
+    return pkl.split(f'  ["{hook}"] {{\n', 1)[1].split("\n  }\n", 1)[0]
+
+
+def test_each_checker_runs_at_its_stage() -> None:
+    lang: dict[str, dict[str, object]] = {"python": {"type_checkers": {"ty": "pre-push", "mypy": "ci"}}}
+    tree = render(attrs.evolve(MANIFEST, lang=lang), "demo-tool")
+    pkl = tree[".config/hk.pkl"].content
+    assert "basedpyright" not in pkl
+    assert "ty" not in hook_steps(pkl, "pre-commit")
+    assert '["ty"] = defs["ty"]' in hook_steps(pkl, "pre-push")
+    assert "mypy" not in hook_steps(pkl, "pre-push")
+    assert '["mypy"] = (defs["mypy"]) { profiles = List("slow") }' in hook_steps(pkl, "check")
+    assert "Types: ty (pre-push / CI), mypy (CI)." in tree["AGENTS.md"].content
 
 
 def test_ci_checkout_drops_the_token() -> None:
@@ -107,7 +123,8 @@ def test_scripts_without_dependencies_add_no_group(tmp_path: Path) -> None:
 def test_scripts_alone_get_a_non_package_root(tmp_path: Path) -> None:
     write(tmp_path, {"scripts/fetch.py": SCRIPT})
     units = [Unit("scripts", "python", "scripts")]
-    manifest = Manifest(version="0.1.0", unit=units, lang={"python": {"type_checker_fast": "ty"}})
+    checkers = {"ty": "pre-commit", "mypy": "pre-push"}
+    manifest = Manifest(version="0.1.0", unit=units, lang={"python": {"type_checkers": checkers}})
     root = tomllib.loads(render(manifest, "demo-tool", tmp_path)["pyproject.toml"].content)
     assert "project" not in root
     assert root["dependency-groups"] == {

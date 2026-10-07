@@ -57,8 +57,8 @@ def test_set_license_conflicts_with_an_edited_license(tmp_path: Path, capsys: py
 
 def test_set_a_language_option(tmp_path: Path) -> None:
     repo = new_repo(tmp_path, "python:lib")
-    assert run("set", "type_checker_thorough=none", "--repo", str(repo)) == 0
-    assert recorded(repo).lang["python"]["type_checker_thorough"] == "none"
+    assert run("set", "type_checkers=basedpyright", "--repo", str(repo)) == 0
+    assert recorded(repo).lang["python"]["type_checkers"] == {"basedpyright": "pre-commit"}
     assert "mypy" not in tomllib.loads((repo / "pyproject.toml").read_text())["tool"]
 
 
@@ -79,6 +79,8 @@ def test_set_a_unit_option_needs_the_unit_when_several_declare_it(tmp_path: Path
         ("python_version=3.13", UsageError),
         ("indent=3", ValueError),
         ("max_line_length=wide", ValueError),
+        ("type_checkers=mypy:nightly", ValueError),
+        ("type_checkers=black", ValueError),
     ],
 )
 def test_set_refuses_bad_options(pair: str, error: type[Exception], tmp_path: Path) -> None:
@@ -119,7 +121,7 @@ def test_add_refuses_a_taken_path_and_foreign_options(tmp_path: Path) -> None:
     with pytest.raises(UsageError, match=r"unknown options for this unit: \['indent'\]"):
         run("add", "python:cli@apps/tool", "--opt", "indent=4", "--repo", str(repo))
     with pytest.raises(UsageError, match="set python options with `tmpl set`"):
-        run("add", "python:cli@apps/tool", "--opt", "type_checker_fast=ty", "--repo", str(repo))
+        run("add", "python:cli@apps/tool", "--opt", "type_checkers=ty", "--repo", str(repo))
 
 
 @pytest.mark.parametrize("spec", ["python:lib@apps", "python:scripts@apps/tool/scripts"])
@@ -172,7 +174,7 @@ def test_remove_keeps_modified_files_and_fails(tmp_path: Path, capsys: pytest.Ca
 
 def test_remove_the_last_unit_of_a_language_drops_the_language(tmp_path: Path) -> None:
     repo = new_repo(tmp_path, "python:scripts@scripts")
-    assert run("set", "type_checker_fast=ty", "--repo", str(repo)) == 0
+    assert run("set", "type_checkers=ty", "--repo", str(repo)) == 0
     commit_all(repo, "use ty")
     with pytest.raises(UsageError, match="no unit at nope; units: scripts"):
         run("remove", "nope", "--repo", str(repo))

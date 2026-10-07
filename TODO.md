@@ -3,18 +3,14 @@
 ## Tool options
 
 Evaluate offering each dev tool below as an optional addition, asked only when a selected template renders a file the
-tool checks. Options are grouped by file type and role, and each group offers its tools plus `none`. For example, any
-template with a YAML file asks:
+tool checks. Options are grouped by file type and role, and each group is a tool option (SPECS §4.1): any of its
+tools, each at its own stage, or `none`. For example, any template with a YAML file asks:
 
 - YAML linter: `yamllint`, `none`
 - YAML formatter: `yamlfmt`, `prettier`
 
 The defaults are `yamllint` and `yamlfmt`, or `yamllint` and `prettier` when a JS/TS template is selected.
 
-- [ ] Multi-select tool options with a stage per tool: `pre-commit`, `pre-push`, or CI only (the `check` hook alone),
-      e.g. `basedpyright` at pre-commit plus `mypy` at pre-push and in CI. This generalizes `type_checker_fast` and
-      `type_checker_thorough`, which are single choices fixed to pre-commit and pre-push. Covers the manifest format,
-      `set`/`--opt` syntax, and migrating existing manifests.
 - [ ] Ask a tool group only when the selected layers render a file it checks, with defaults that can depend on other
       layers (`prettier` as the formatter when a JS/TS layer is present).
 
@@ -22,8 +18,6 @@ The defaults are `yamllint` and `yamlfmt`, or `yamllint` and `prettier` when a J
 
 - [ ] ruff: Python linter and formatter, always on today; evaluate it as the default of a linter group and a formatter
       group that also offer `none`.
-- [ ] mypy, basedpyright, pyright, ty: move the two existing type-checker options into one multi-select type-checker
-      group.
 
 ### YAML (every repo: `.github/workflows/ci.yml`)
 
