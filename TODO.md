@@ -61,3 +61,9 @@ The selection machinery supports rendered-file filters and layer-dependent defau
       `byte_order_marker`, `check_added_large_files`, `check_executables_have_shebangs`, `check_symlinks`,
       `detect_private_key`, `fix_smart_quotes`, `mixed_line_ending`, `no_commit_to_branch`.
 - [ ] Renovate: already the `deps-update` feature; decide whether it joins this option model or stays a feature.
+
+## Release checks
+
+- [ ] Let `mise run cross-release` take a Git ref (commit or branch) for NEW, not only a version, so it can run on the
+      pushed PR branch before `main` and the tag move. Today `scripts/cross-release-check` installs
+      `git+https://github.com/kemus/_tmpl@v<version>`, so it can only check a release that is already tagged.
